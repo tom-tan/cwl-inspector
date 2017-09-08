@@ -7,7 +7,7 @@ cwl-inspector provides a handy way to inspect properties of a description of too
 # Running examples
 
 Input:
-```console:
+```console
 $ cat echo.cwl
 class: CommandLineTool
 cwlVersion: v1.0
@@ -31,13 +31,13 @@ requirements:
 ```
 
 ## show a property named 'cwlVersion'
-```console:
+```console
 $ ./cwl-inspector echo.cwl cwlVersion
 v1.0
 ```
 
 ## show a nested property
-```console:
+```console
 $ ./cwl-inspector echo.cwl inputs.input.label
 Input string
 ```
