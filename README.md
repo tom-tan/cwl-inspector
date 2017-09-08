@@ -32,7 +32,7 @@ requirements:
 
 ## show a property named 'cwlVersion'
 ```console:
-$ ./cwl-inspector echo.cwl cwlVersion # show a property named 'cwlVersion'
+$ ./cwl-inspector echo.cwl cwlVersion
 v1.0
 ```
 
