@@ -1,5 +1,5 @@
 # cwl-inspector
-cwl-inspector provides a handy way to inspect properties of a description of tools or workflows written in Common Workflow Language
+cwl-inspector provides a handy way to inspect properties of tools or workflows written in Common Workflow Language
 
 # Requirements
 - Ruby 2.4.1 or later
