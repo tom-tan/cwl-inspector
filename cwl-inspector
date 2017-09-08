@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+# coding: utf-8
+require 'yaml'
+require 'optparse'
+
+def search(cwl, pos)
+  pos.split('.').reduce(cwl) { |cwl_, po|
+    case po
+    when 'inputs', 'outputs', 'steps' # TODO: consider `position`
+      if cwl_[po].instance_of? Array
+        Hash[cwl_[po].map{ |e| [e['id'], e] }]
+      else
+        cwl_[po]
+      end
+    when 'baseCommand'
+      if cwl_[po].instance_of? String
+        [cwl_[po]]
+      else
+        cwl_[po]
+      end
+    else
+      po = po.to_i if po.match(/\d+/)
+      cwl_[po]
+    end
+  }
+end
+
+def to_cmd(cwl)
+  [
+    "docker run --rm",
+    search(cwl, 'requirements.0.dockerPull'),
+    *search(cwl, 'baseCommand'),
+    *search(cwl, 'inputs').map { |id, param|
+      to_input_param_args(cwl, id)
+    }.flatten(1)
+  ].join(' ')
+end
+
+def to_input_param_args(cwl, id)
+  dat = search(cwl, "inputs.#{id}")
+  pre = dat.fetch('prefix', nil)
+  args = if pre
+           if dat.fetch('separate', false)
+             [pre, "$#{id}"].join('')
+           else
+             [pre, "$#{id}"]
+           end
+         else
+           ["$#{id}"]
+         end
+  if dat['type'].end_with?('?')
+    ['[', *args, ']']
+  else
+    args
+  end
+end
+
+if $0 == __FILE__
+  printer = :puts
+  opt = OptionParser.new
+  opt.banner = "Usage: #{$0} cwl pos"
+  opt.on('--raw', 'print raw output') {
+    printer = :p
+  }
+  opt.parse!(ARGV)
+
+  unless ARGV.length == 2
+    puts opt.banner
+    exit
+  end
+
+  input, pos = ARGV
+  cwl = YAML.load_file(input)
+
+  if pos == 'commandline'
+    if search(cwl, 'class') == 'Workflow'
+      raise "'commandline' can be used for CommandLineTool"
+    end
+    Kernel.method(printer).call to_cmd(cwl)
+  else
+    Kernel.method(printer).call search(cwl, pos)
+  end
+end
