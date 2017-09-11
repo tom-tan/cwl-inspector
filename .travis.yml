@@ -1,0 +1,15 @@
+language: ruby
+rvm:
+  - 2.4.1
+
+script:
+  - ./test/run_test.rb
+
+after_success:
+  - echo Success!
+
+before_deploy:
+  - echo Build docker image.
+
+deploy:
+  - echo Push docker image to dockerhub.
