@@ -82,7 +82,11 @@ def to_input_param_args(cwl, id)
 end
 
 def cwl_inspect(cwl, pos)
-  cwl = YAML.load_file(cwl)
+  cwl = if cwl == '-'
+          YAML.load_stream(STDIN)[0]
+        else
+          YAML.load_file(cwl)
+        end
   # TODO: validate CWL
   if pos == 'commandline'
     if inspect_pos(cwl, 'class') == 'Workflow'
