@@ -3,7 +3,7 @@
 require 'yaml'
 require 'optparse'
 
-def search(cwl, pos)
+def inspect_pos(cwl, pos)
   pos.split('.').reduce(cwl) { |cwl_, po|
     case po
     when 'inputs', 'outputs', 'steps' # TODO: consider `position`
@@ -28,16 +28,16 @@ end
 def to_cmd(cwl)
   [
     "docker run --rm",
-    search(cwl, 'requirements.0.dockerPull'),
-    *search(cwl, 'baseCommand'),
-    *search(cwl, 'inputs').map { |id, param|
+    inspect_pos(cwl, 'requirements.0.dockerPull'),
+    *inspect_pos(cwl, 'baseCommand'),
+    *inspect_pos(cwl, 'inputs').map { |id, param|
       to_input_param_args(cwl, id)
     }.flatten(1)
   ].join(' ')
 end
 
 def to_input_param_args(cwl, id)
-  dat = search(cwl, "inputs.#{id}")
+  dat = inspect_pos(cwl, "inputs.#{id}")
   pre = dat.fetch('prefix', nil)
   args = if pre
            if dat.fetch('separate', false)
@@ -55,14 +55,15 @@ def to_input_param_args(cwl, id)
   end
 end
 
-def entrypoint(cwl, pos)
+def cwl_inspect(cwl, pos)
+  # TODO: validate CWL
   if pos == 'commandline'
-    if search(cwl, 'class') == 'Workflow'
+    if inspect_pos(cwl, 'class') == 'Workflow'
       raise "'commandline' can be used for CommandLineTool"
     end
     to_cmd(cwl)
   else
-    search(cwl, pos)
+    inspect_pos(cwl, pos)
   end
 end
 
@@ -83,5 +84,5 @@ if $0 == __FILE__
   input, pos = ARGV
   cwl = YAML.load_file(input)
 
-  Kernel.method(printer).call entrypoint(cwl, pos)
+  Kernel.method(printer).call cwl_inspect(cwl, pos)
 end
