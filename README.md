@@ -32,18 +32,18 @@ requirements:
 
 ## show a property named 'cwlVersion'
 ```console
-$ ./cwl-inspector echo.cwl cwlVersion
+$ ./cwl-inspector.rb echo.cwl cwlVersion
 v1.0
 ```
 
 ## show a nested property
 ```console
-$ ./cwl-inspector echo.cwl inputs.input.label
+$ ./cwl-inspector.rb echo.cwl inputs.input.label
 Input string
 ```
 
 ## show the command to run a given cwl file
 ```console
-$ ./cwl-inspector echo.cwl commandline
+$ ./cwl-inspector.rb echo.cwl commandline
 docker run --rm docker/whalesay cowsay [ $input ]
 ```
