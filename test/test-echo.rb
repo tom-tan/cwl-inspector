@@ -13,6 +13,6 @@ class TestEcho < Test::Unit::TestCase
 
   def test_commandline
     assert_equal(cwl_inspect("#{CWL_PATH}/echo.cwl", 'commandline'),
-                'docker run --rm docker/whalesay cowsay [ $input ]')
+                 'docker run --rm docker/whalesay cowsay [ $input ]')
   end
 end
