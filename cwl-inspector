@@ -82,6 +82,7 @@ def to_input_param_args(cwl, id)
 end
 
 def cwl_inspect(cwl, pos)
+  cwl = YAML.load_file(cwl)
   # TODO: validate CWL
   if pos == 'commandline'
     if inspect_pos(cwl, 'class') == 'Workflow'
@@ -107,8 +108,6 @@ if $0 == __FILE__
     exit
   end
 
-  input, pos = ARGV
-  cwl = YAML.load_file(input)
-
+  cwl, pos = ARGV
   Kernel.method(printer).call cwl_inspect(cwl, pos)
 end
