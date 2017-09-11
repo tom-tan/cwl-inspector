@@ -55,6 +55,17 @@ def to_input_param_args(cwl, id)
   end
 end
 
+def entrypoint(cwl, pos)
+  if pos == 'commandline'
+    if search(cwl, 'class') == 'Workflow'
+      raise "'commandline' can be used for CommandLineTool"
+    end
+    to_cmd(cwl)
+  else
+    search(cwl, pos)
+  end
+end
+
 if $0 == __FILE__
   printer = :puts
   opt = OptionParser.new
@@ -72,12 +83,5 @@ if $0 == __FILE__
   input, pos = ARGV
   cwl = YAML.load_file(input)
 
-  if pos == 'commandline'
-    if search(cwl, 'class') == 'Workflow'
-      raise "'commandline' can be used for CommandLineTool"
-    end
-    Kernel.method(printer).call to_cmd(cwl)
-  else
-    Kernel.method(printer).call search(cwl, pos)
-  end
+  Kernel.method(printer).call entrypoint(cwl, pos)
 end
