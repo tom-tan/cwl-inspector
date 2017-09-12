@@ -45,16 +45,16 @@ def inspect_pos(cwl, pos)
 end
 
 # TODO: more clean implementation
-def cwl_fetch(cwl, pos)
+def cwl_fetch(cwl, pos, default)
   begin
     inspect_pos(cwl, pos)
   rescue
-    nil
+    default
   end
 end
 
 def to_cmd(cwl)
-  reqs = cwl_fetch(cwl, 'requirements')
+  reqs = cwl_fetch(cwl, 'requirements', nil)
   docker_idx = nil
   unless reqs.nil?
     docker_idx = reqs.find_index{ |e| e['class'] == 'DockerRequirement' }
@@ -67,7 +67,7 @@ def to_cmd(cwl)
     else
       []
     end,
-    *inspect_pos(cwl, 'baseCommand'),
+    *cwl_fetch(cwl, 'baseCommand', []),
     *inspect_pos(cwl, 'inputs').map { |id, param|
       to_input_param_args(cwl, id)
     }.flatten(1)
