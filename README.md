@@ -8,9 +8,8 @@ cwl-inspector provides a handy way to inspect properties of tools or workflows w
 
 # Running examples
 
-Input:
-```console
-$ cat echo.cwl
+Input: echo.cwl
+```yaml
 class: CommandLineTool
 cwlVersion: v1.0
 id: echo_cwl
