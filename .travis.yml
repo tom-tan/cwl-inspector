@@ -1,6 +1,14 @@
+sudo: required
+
 language: ruby
 rvm:
   - 2.4.1
 
+services:
+  - docker
+
 script:
   - ./test/run_test.rb
+
+after_success:
+  - ./deploy.sh
