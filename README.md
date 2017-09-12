@@ -39,6 +39,20 @@ v1.0
 
 ## show a nested property
 ```console
+$ ./cwl-inspector.rb echo.cwl requirements.0.class
+DockerRequirement
+```
+
+You can access an input parameter by using its index (specified by `position` field) or its id.
+
+```console
+$ ./cwl-inspector.rb echo.cwl inputs.0.label
+Input string
+```
+
+or
+
+```console
 $ ./cwl-inspector.rb echo.cwl inputs.input.label
 Input string
 ```
