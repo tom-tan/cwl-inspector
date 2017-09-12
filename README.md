@@ -48,3 +48,12 @@ Input string
 $ ./cwl-inspector.rb echo.cwl commandline
 docker run --rm docker/whalesay cowsay [ $input ]
 ```
+
+# Dockerized cwl-inspector
+You can use [`ttanjo/cwl-inspector`](https://hub.docker.com/r/ttanjo/cwl-inspector/) image.
+This image is built by [Travis CI runner](https://travis-ci.org/tom-tan/cwl-inspector).
+
+```console
+$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - cwlVersion
+v1.0
+```
