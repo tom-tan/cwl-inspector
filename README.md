@@ -1,4 +1,6 @@
 # cwl-inspector
+[![Build Status](https://travis-ci.org/tom-tan/cwl-inspector.svg?branch=master)](https://travis-ci.org/tom-tan/cwl-inspector)
+
 cwl-inspector provides a handy way to inspect properties of tools or workflows written in Common Workflow Language
 
 # Requirements
