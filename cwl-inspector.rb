@@ -6,7 +6,7 @@ require 'optparse'
 def inspect_pos(cwl, pos)
   pos.split('.').reduce(cwl) { |cwl_, po|
     case po
-    when 'inputs', 'outputs', 'steps' # TODO: consider `position`
+    when 'inputs', 'outputs', 'steps'
       raise "No such field #{pos}" unless cwl_.include? po
       if cwl_[po].instance_of? Array
         Hash[cwl_[po].map{ |e| [e['id'], e] }]
@@ -21,13 +21,25 @@ def inspect_pos(cwl, pos)
         cwl_[po]
       end
     else
-      po = po.to_i if po.match(/\d+/)
-      if cwl_.instance_of? Array
-        raise "No such field #{pos}" unless po < cwl_.length
-      elsif not cwl_.include? po # Hash
-        raise "No such field #{pos}"
+      if po.match(/\d+/)
+        po = po.to_i
+        if cwl_.instance_of? Array
+          raise "No such field #{pos}" unless po < cwl_.length
+          cwl_[po]
+        else # Hash
+          # raise if not CommandInputParameter
+          raise "No such field #{pos}" unless cwl_.values.first.include? 'id'
+          candidates = cwl_.values.find_all{ |e|
+            e.fetch('inputBinding', { 'position' => 0 }).fetch('position', 0) == po
+          }
+          raise "No such field #{pos}" if candidates.empty?
+          raise "Duplicated index #{po} in #{pos}" if candidates.length > 1
+          candidates.first
+        end
+      else
+        raise "No such field #{pos}" unless cwl_.include? po
+        cwl_[po]
       end
-      cwl_[po]
     end
   }
 end
