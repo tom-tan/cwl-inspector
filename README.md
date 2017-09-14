@@ -71,3 +71,6 @@ This image is built by [Travis CI](https://travis-ci.org/tom-tan/cwl-inspector).
 $ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - cwlVersion
 v1.0
 ```
+
+# License
+This software is released under the [MIT License](https://github.com/tom-tan/cwl-inspector/blob/master/LICENSE).
