@@ -50,8 +50,6 @@ def inspect_pos(cwl, pos)
           raise "No such field #{pos}" unless po < cwl_.length
           cwl_[po]
         else # Hash
-          # raise if not CommandInputParameter
-          raise "No such field #{pos}" unless cwl_.values.first.include? 'id'
           candidates = cwl_.values.find_all{ |e|
             e.fetch('inputBinding', { 'position' => 0 }).fetch('position', 0) == po
           }
