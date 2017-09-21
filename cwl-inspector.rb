@@ -74,7 +74,8 @@ def cwl_fetch(cwl, pos, default)
   end
 end
 
-def to_cmd(cwl)
+def to_cmd(cwl, args)
+  args = to_arg_map(args)
   reqs = cwl_fetch(cwl, 'requirements', nil)
   docker_idx = nil
   unless reqs.nil?
@@ -90,31 +91,41 @@ def to_cmd(cwl)
     end,
     *cwl_fetch(cwl, 'baseCommand', []),
     *inspect_pos(cwl, 'inputs').map { |id, param|
-      to_input_param_args(cwl, id)
+      to_input_param_args(cwl, id, args)
     }.flatten(1)
   ].join(' ')
 end
 
-def to_input_param_args(cwl, id)
+def to_arg_map(args)
+  raise "Invalid arguments: #{args}" if args.length.odd?
+  Hash[
+    0.step(args.length-1, 2).map{ |i|
+      opt = args[i][2..-1]
+      [opt, args[i+1]]
+    }]
+end
+
+def to_input_param_args(cwl, id, args)
+  param = args.fetch(id, "$#{id}")
   dat = inspect_pos(cwl, "inputs.#{id}")
   pre = dat.fetch('prefix', nil)
   args = if pre
            if dat.fetch('separate', false)
-             [pre, "$#{id}"].join('')
+             [pre, param].join('')
            else
-             [pre, "$#{id}"]
+             [pre, param]
            end
          else
-           ["$#{id}"]
+           [param]
          end
-  if dat['type'].end_with?('?')
+  if param == "$#{id}" and dat['type'].end_with?('?')
     ['[', *args, ']']
   else
     args
   end
 end
 
-def cwl_inspect(cwl, pos)
+def cwl_inspect(cwl, pos, args)
   cwl = if cwl == '-'
           YAML.load_stream(STDIN)[0]
         else
@@ -125,8 +136,11 @@ def cwl_inspect(cwl, pos)
     if inspect_pos(cwl, 'class') == 'Workflow'
       raise "'commandline' can be used for CommandLineTool"
     end
-    to_cmd(cwl)
+    to_cmd(cwl, args)
   else
+    unless args.empty?
+      raise "Invalid arguments: #{args}"
+    end
     inspect_pos(cwl, pos)
   end
 end
@@ -140,11 +154,11 @@ if $0 == __FILE__
   }
   opt.parse!(ARGV)
 
-  unless ARGV.length == 2
+  unless ARGV.length >= 2
     puts opt.banner
     exit
   end
 
-  cwl, pos = ARGV
-  Kernel.method(printer).call cwl_inspect(cwl, pos)
+  cwl, pos, *args = ARGV
+  Kernel.method(printer).call cwl_inspect(cwl, pos, args)
 end
