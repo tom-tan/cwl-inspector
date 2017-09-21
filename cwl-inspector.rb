@@ -125,7 +125,7 @@ def to_input_param_args(cwl, id, args)
   end
 end
 
-def cwl_inspect(cwl, pos, args)
+def cwl_inspect(cwl, pos, args = [])
   cwl = if cwl == '-'
           YAML.load_stream(STDIN)[0]
         else
