@@ -63,6 +63,12 @@ $ ./cwl-inspector.rb echo.cwl commandline
 docker run -i --rm docker/whalesay cowsay [ $input ]
 ```
 
+You can also specify the parameter to show the command with instantiated parameters.
+```console
+$ ./cwl-inspector.rb echo.cwl commandline -- --input Hello!
+docker run -i --rm docker/whalesay cowsay Hello!
+```
+
 # Dockerized cwl-inspector
 You can use [`ttanjo/cwl-inspector`](https://hub.docker.com/r/ttanjo/cwl-inspector/) image.
 This image is built by [Travis CI](https://travis-ci.org/tom-tan/cwl-inspector).
