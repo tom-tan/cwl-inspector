@@ -60,7 +60,7 @@ Input string
 ## show the command to run a given cwl file
 ```console
 $ ./cwl-inspector.rb echo.cwl commandline
-docker run --rm docker/whalesay cowsay [ $input ]
+docker run -i --rm docker/whalesay cowsay [ $input ]
 ```
 
 # Dockerized cwl-inspector
