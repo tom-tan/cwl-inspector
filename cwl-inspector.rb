@@ -83,7 +83,7 @@ def to_cmd(cwl)
 
   [
     *unless docker_idx.nil?
-      ["docker run --rm",
+      ["docker run -i --rm",
        inspect_pos(cwl, "requirements.#{docker_idx}.dockerPull")]
     else
       []
