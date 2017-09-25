@@ -33,27 +33,27 @@ requirements:
 
 ## show a property named 'cwlVersion'
 ```console
-$ ./cwl-inspector.rb echo.cwl cwlVersion
+$ ./cwl-inspector.rb echo.cwl .cwlVersion
 v1.0
 ```
 
 ## show a nested property
 ```console
-$ ./cwl-inspector.rb echo.cwl requirements.0.class
+$ ./cwl-inspector.rb echo.cwl .requirements.0.class
 DockerRequirement
 ```
 
 You can access an input parameter by using its index (specified by `position` field) or its id.
 
 ```console
-$ ./cwl-inspector.rb echo.cwl inputs.0.label
+$ ./cwl-inspector.rb echo.cwl .inputs.0.label
 Input string
 ```
 
 or
 
 ```console
-$ ./cwl-inspector.rb echo.cwl inputs.input.label
+$ ./cwl-inspector.rb echo.cwl .inputs.input.label
 Input string
 ```
 
@@ -74,7 +74,7 @@ You can use [`ttanjo/cwl-inspector`](https://hub.docker.com/r/ttanjo/cwl-inspect
 This image is built by [Travis CI](https://travis-ci.org/tom-tan/cwl-inspector).
 
 ```console
-$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - cwlVersion
+$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - .cwlVersion
 v1.0
 ```
 

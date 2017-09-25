@@ -137,11 +137,13 @@ def cwl_inspect(cwl, pos, args = [])
       raise "'commandline' can be used for CommandLineTool"
     end
     to_cmd(cwl, args)
-  else
+  elsif pos.start_with? '.'
     unless args.empty?
       raise "Invalid arguments: #{args}"
     end
-    inspect_pos(cwl, pos)
+    inspect_pos(cwl, pos[1..-1])
+  else
+    raise "Error: pos should be .x.y.z or 'commandline'"
   end
 end
 
