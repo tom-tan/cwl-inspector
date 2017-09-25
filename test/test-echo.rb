@@ -30,4 +30,15 @@ class TestEcho < Test::Unit::TestCase
     assert_equal(cwl_inspect("#{CWL_PATH}/echo.cwl", 'commandline', ['--input', 'Hello!']),
                  'docker run -i --rm docker/whalesay cowsay Hello!')
   end
+
+  def test_root_keys
+    assert_equal(cwl_inspect("#{CWL_PATH}/echo.cwl", 'keys(.)'),
+                 ['class', 'cwlVersion', 'id', 'baseCommand',
+                  'inputs', 'outputs', 'requirements'])
+  end
+
+  def test_keys
+    assert_equal(cwl_inspect("#{CWL_PATH}/echo.cwl", 'keys(.inputs)'),
+                 ['input'])
+  end
 end

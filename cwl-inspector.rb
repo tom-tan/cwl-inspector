@@ -142,8 +142,16 @@ def cwl_inspect(cwl, pos, args = [])
       raise "Invalid arguments: #{args}"
     end
     inspect_pos(cwl, pos[1..-1])
+  elsif pos.match(/^(.+)\(\.(.+)?\)$/)
+    op, pos_ = $1, $2
+    case op
+    when 'keys'
+      inspect_pos(cwl, pos_.nil? ? '' : pos_).keys
+    else
+      raise "Unknown operator: #{op}"
+    end
   else
-    raise "Error: pos should be .x.y.z or 'commandline'"
+    raise "Error: pos should be .x.y.z, keys(.x.y.z) or 'commandline'"
   end
 end
 

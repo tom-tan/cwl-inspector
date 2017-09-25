@@ -57,6 +57,18 @@ $ ./cwl-inspector.rb echo.cwl .inputs.input.label
 Input string
 ```
 
+## show keys in the specified property
+```console
+$ ./cwl-inspector.rb echo.cwl 'keys(.)'
+class
+cwlVersion
+id
+baseCommand
+inputs
+outputs
+requirements
+```
+
 ## show the command to run a given cwl file
 ```console
 $ ./cwl-inspector.rb echo.cwl commandline
