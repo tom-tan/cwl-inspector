@@ -146,11 +146,11 @@ def cwl_inspect(cwl, pos, args = [])
 end
 
 if $0 == __FILE__
-  printer = :puts
+  fmt = ->(a) { a }
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} cwl pos"
-  opt.on('--raw', 'print raw output') {
-    printer = :p
+  opt.on('--yaml', 'print in YAML format') {
+    fmt = ->(a) { YAML.dump(a) }
   }
   opt.parse!(ARGV)
 
@@ -160,5 +160,5 @@ if $0 == __FILE__
   end
 
   cwl, pos, *args = ARGV
-  Kernel.method(printer).call cwl_inspect(cwl, pos, args)
+  puts fmt.call cwl_inspect(cwl, pos, args)
 end
