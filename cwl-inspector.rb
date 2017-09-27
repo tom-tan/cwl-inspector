@@ -206,7 +206,7 @@ if $0 == __FILE__
   opt.parse!(ARGV)
 
   unless ARGV.length >= 2
-    puts opt.banner
+    puts opt.help
     exit
   end
 
