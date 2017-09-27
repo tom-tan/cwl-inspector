@@ -24,6 +24,7 @@
 #
 
 require 'yaml'
+require 'json'
 require 'optparse'
 
 def inspect_pos(cwl, pos)
@@ -76,11 +77,8 @@ end
 
 def to_cmd(cwl, args)
   args = to_arg_map(args)
-  reqs = cwl_fetch(cwl, 'requirements', nil)
-  docker_idx = nil
-  unless reqs.nil?
-    docker_idx = reqs.find_index{ |e| e['class'] == 'DockerRequirement' }
-  end
+  reqs = cwl_fetch(cwl, 'requirements', [])
+  docker_idx = reqs.find_index{ |e| e['class'] == 'DockerRequirement' }
 
   [
     *unless docker_idx.nil?
@@ -90,6 +88,9 @@ def to_cmd(cwl, args)
       []
     end,
     *cwl_fetch(cwl, 'baseCommand', []),
+    *cwl_fetch(cwl, 'arguments', []).map{ |a|
+      to_input_arg(cwl, a)
+    }.flatten(1),
     *inspect_pos(cwl, 'inputs').map { |id, param|
       to_input_param_args(cwl, id, args)
     }.flatten(1)
@@ -105,6 +106,46 @@ def to_arg_map(args)
     }]
 end
 
+def to_input_arg(cwl, arg)
+  if arg.instance_of? String
+    arg
+  else # Hash
+    exp = arg['valueFrom'].match(/^\s*(.+)\s*$/m)[1]
+    exp = if exp.start_with?('$')
+            e = exp[1..-1]
+            fbody = e.start_with?('(') ? "{ return #{e}; }" : e
+            if cwl_fetch(cwl, 'requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
+              JSON.load(IO.popen(['node', '--eval',
+                                  "process.stdout.write(JSON.stringify((function() #{fbody})()))"]) { |io|
+                          ret = io.gets
+                          io.close_write
+                          ret
+                        })
+            else
+              raise "Unimplemented Error"
+            end
+          else
+            exp
+          end
+
+    if exp.instance_of? Array
+      # TODO: Check the behavior if itemSeparator is missing
+      exp = exp.join(arg.fetch('itemSeparator', ' '))
+    end
+
+    pre = arg.fetch('prefix', nil)
+    if pre
+      if arg.fetch('separate', false)
+        [pre, exp].join('')
+      else
+        [pre, exp]
+      end
+    else
+      [exp]
+    end
+  end
+end
+
 def to_input_param_args(cwl, id, args)
   param = args.fetch(id, "$#{id}")
   dat = inspect_pos(cwl, "inputs.#{id}")
@@ -118,7 +159,7 @@ def to_input_param_args(cwl, id, args)
          else
            [param]
          end
-  if param == "$#{id}" and dat['type'].end_with?('?')
+  if param == "$#{id}" and dat.fetch('type', '').end_with?('?')
     ['[', *args, ']']
   else
     args
