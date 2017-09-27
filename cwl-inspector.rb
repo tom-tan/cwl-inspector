@@ -251,5 +251,6 @@ if $0 == __FILE__
   end
 
   cwl, pos, *args = ARGV
+  args = args.map{ |a| a.split('=') }.flatten
   puts fmt.call cwl_inspect(cwl, pos, args)
 end
