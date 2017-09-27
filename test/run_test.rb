@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+CWL_PATH=File.join(File.dirname(__FILE__), '..', 'examples')
+
 if $0 == __FILE__
   base_dir = File.expand_path(File.join(File.dirname(__FILE__), ".."))
   lib_dir  = File.join(base_dir, "lib")

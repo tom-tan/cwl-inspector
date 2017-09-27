@@ -106,6 +106,37 @@ def to_arg_map(args)
     }]
 end
 
+
+def node_bin
+  if $nodejs
+    raise "#{$nodejs} is not executable or does not exist" unless File.executable? $nodejs
+    $nodejs
+  else
+    node = ['node', 'nodejs'].find{ |n|
+      system("which #{n} > /dev/null")
+    }
+    raise "No executables for Nodejs" if node.nil?
+    node
+  end
+end
+
+def exec_node(cmd)
+  node = node_bin
+  JSON.load(IO.popen([node, '--eval',
+                      "process.stdout.write(JSON.stringify((function() #{cmd})()))"]) { |io|
+              ret = io.gets
+              io.close_write
+              ret
+            })
+end
+
+def eval_expression(exp)
+  # inputs
+  # self
+  # runtime
+  exec_node(exp)
+end
+
 def to_input_arg(cwl, arg)
   if arg.instance_of? String
     arg
@@ -115,12 +146,7 @@ def to_input_arg(cwl, arg)
             e = exp[1..-1]
             fbody = e.start_with?('(') ? "{ return #{e}; }" : e
             if cwl_fetch(cwl, 'requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
-              JSON.load(IO.popen(['node', '--eval',
-                                  "process.stdout.write(JSON.stringify((function() #{fbody})()))"]) { |io|
-                          ret = io.gets
-                          io.close_write
-                          ret
-                        })
+              eval_expression(fbody)
             else
               raise "Unimplemented Error"
             end
@@ -202,6 +228,9 @@ if $0 == __FILE__
   opt.banner = "Usage: #{$0} cwl pos"
   opt.on('--yaml', 'print in YAML format') {
     fmt = ->(a) { YAML.dump(a) }
+  }
+  opt.on('--nodejs-bin=NODE', 'path to nodejs for InlineJavascriptRequirement') { |nodejs|
+    $nodejs = nodejs
   }
   opt.parse!(ARGV)
 

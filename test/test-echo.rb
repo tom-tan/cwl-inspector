@@ -3,7 +3,9 @@
 require 'test/unit'
 require_relative '../cwl-inspector'
 
-CWL_PATH=File.join(File.dirname(__FILE__), '..', 'examples')
+unless defined? CWL_PATH
+  CWL_PATH=File.join(File.dirname(__FILE__), '..', 'examples')
+end
 
 class TestEcho < Test::Unit::TestCase
   def test_version

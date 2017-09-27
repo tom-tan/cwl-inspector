@@ -92,3 +92,6 @@ v1.0
 
 # License
 This software is released under the [MIT License](https://github.com/tom-tan/cwl-inspector/blob/master/LICENSE).
+
+The following file in `examples` is copied from [common-workflow-language/common-workflow-language](https://github.com/common-workflow-language/common-workflow-language) and is released under [Apache 2.0 License](https://github.com/common-workflow-language/common-workflow-language/blob/master/LICENSE.txt).
+- `examples/expression.cwl` ([Source in common-workflow-language/common-workflow-language](https://github.com/common-workflow-language/common-workflow-language/blob/master/v1.0/examples/expression.cwl))
