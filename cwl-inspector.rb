@@ -75,18 +75,29 @@ def cwl_fetch(cwl, pos, default)
   end
 end
 
+def docker_cmd(cwl)
+  img = if cwl_fetch(cwl, 'requirements', []).find_index{ |e| e['class'] == 'DockerRequirement' }
+          idx = cwl_fetch(cwl, 'requirements', []).find_index{ |e|
+            e['class'] == 'DockerRequirement'
+          }
+          inspect_pos(cwl, "requirements.#{idx}.dockerPull")
+        elsif cwl_fetch(cwl, 'hints.DockerRequirement', nil) and system('which docker > /dev/null')
+          cwl_fetch(cwl, 'hints.DockerRequirement.dockerPull', nil)
+        else
+          nil
+        end
+  if img
+    ['docker', 'run', '-i', '--rm', img]
+  else
+    []
+  end
+end
+
 def to_cmd(cwl, args)
   args = to_arg_map(args)
-  reqs = cwl_fetch(cwl, 'requirements', [])
-  docker_idx = reqs.find_index{ |e| e['class'] == 'DockerRequirement' }
 
   [
-    *unless docker_idx.nil?
-      ["docker run -i --rm",
-       inspect_pos(cwl, "requirements.#{docker_idx}.dockerPull")]
-    else
-      []
-    end,
+    *docker_cmd(cwl),
     *cwl_fetch(cwl, 'baseCommand', []),
     *cwl_fetch(cwl, 'arguments', []).map{ |a|
       to_input_arg(cwl, a)
