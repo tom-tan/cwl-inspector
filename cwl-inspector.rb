@@ -99,11 +99,11 @@ def to_cmd(cwl, args)
   [
     *docker_cmd(cwl),
     *cwl_fetch(cwl, 'baseCommand', []),
-    *cwl_fetch(cwl, 'arguments', []).map{ |a|
-      to_input_arg(cwl, a)
+    *cwl_fetch(cwl, 'arguments', []).map{ |body|
+      to_input_param_args(cwl, nil, body)
     }.flatten(1),
-    *inspect_pos(cwl, 'inputs').map { |id, param|
-      to_input_param_args(cwl, id, args)
+    *inspect_pos(cwl, 'inputs').map { |id, body|
+      to_input_param_args(cwl, id, body, args)
     }.flatten(1)
   ].join(' ')
 end
@@ -141,65 +141,53 @@ def exec_node(cmd)
             })
 end
 
-def eval_expression(exp)
-  # inputs
-  # self
-  # runtime
-  exec_node(exp)
-end
-
-def to_input_arg(cwl, arg)
-  if arg.instance_of? String
-    arg
-  else # Hash
-    exp = arg['valueFrom'].match(/^\s*(.+)\s*$/m)[1]
-    exp = if exp.start_with?('$')
-            e = exp[1..-1]
-            fbody = e.start_with?('(') ? "{ return #{e}; }" : e
-            if cwl_fetch(cwl, 'requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
-              eval_expression(fbody)
-            else
-              raise "Unimplemented Error"
-            end
-          else
-            exp
-          end
-
-    if exp.instance_of? Array
-      # TODO: Check the behavior if itemSeparator is missing
-      exp = exp.join(arg.fetch('itemSeparator', ' '))
-    end
-
-    pre = arg.fetch('prefix', nil)
-    if pre
-      if arg.fetch('separate', false)
-        [pre, exp].join('')
-      else
-        [pre, exp]
-      end
-    else
-      [exp]
-    end
+def eval_expression(cwl, exp)
+  if cwl_fetch(cwl, 'requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
+    fbody = exp.start_with?('(') ? "{ return #{exp}; }" : exp
+    exec_node(fbody)
+  else
+    # inputs
+    # runtime
+    # runtime.outdir
+    # self
+    exp
   end
 end
 
-def to_input_param_args(cwl, id, args)
-  param = args.fetch(id, "$#{id}")
-  dat = inspect_pos(cwl, "inputs.#{id}")
-  pre = dat.fetch('prefix', nil)
-  args = if pre
-           if dat.fetch('separate', false)
-             [pre, param].join('')
-           else
-             [pre, param]
-           end
-         else
-           [param]
-         end
-  if param == "$#{id}" and dat.fetch('type', '').end_with?('?')
-    ['[', *args, ']']
+def to_input_param_args(cwl, id, body, params={})
+  return body if body.instance_of? String
+
+  input = id.nil? ? nil : params.fetch(id, "$#{id}")
+  param = if body.include? 'valueFrom'
+            e = body['valueFrom'].match(/^\s*(.+)\s*$/m)[1]
+            if e.start_with? '$'
+              # it may use `input`
+              eval_expression(cwl, e[1..-1])
+            else
+              e
+            end
+          else
+            input
+          end
+  if param.instance_of? Array
+    # TODO: Check the behavior if itemSeparator is missing
+    param = param.join(body.fetch('itemSeparator', ' '))
+  end
+
+  pre = body.fetch('prefix', nil)
+  argstrs = if pre
+              if body.fetch('separate', false)
+                [pre, param].join('')
+              else
+                [pre, param]
+              end
+            else
+              [param]
+            end
+  if param == "$#{id}" and body.fetch('type', '').end_with?('?')
+    ['[', *argstrs, ']']
   else
-    args
+    argstrs
   end
 end
 
