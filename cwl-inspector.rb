@@ -28,7 +28,7 @@ require 'json'
 require 'optparse'
 
 def inspect_pos(cwl, pos)
-  pos.split('.').reduce(cwl) { |cwl_, po|
+  pos[1..-1].split('.').reduce(cwl) { |cwl_, po|
     case po
     when 'inputs', 'outputs', 'steps'
       raise "No such field #{pos}" unless cwl_.include? po
@@ -76,13 +76,13 @@ def cwl_fetch(cwl, pos, default)
 end
 
 def docker_cmd(cwl)
-  img = if cwl_fetch(cwl, 'requirements', []).find_index{ |e| e['class'] == 'DockerRequirement' }
-          idx = cwl_fetch(cwl, 'requirements', []).find_index{ |e|
+  img = if cwl_fetch(cwl, '.requirements', []).find_index{ |e| e['class'] == 'DockerRequirement' }
+          idx = cwl_fetch(cwl, '.requirements', []).find_index{ |e|
             e['class'] == 'DockerRequirement'
           }
-          inspect_pos(cwl, "requirements.#{idx}.dockerPull")
-        elsif cwl_fetch(cwl, 'hints.DockerRequirement', nil) and system('which docker > /dev/null')
-          cwl_fetch(cwl, 'hints.DockerRequirement.dockerPull', nil)
+          inspect_pos(cwl, ".requirements.#{idx}.dockerPull")
+        elsif cwl_fetch(cwl, '.hints.DockerRequirement', nil) and system('which docker > /dev/null')
+          cwl_fetch(cwl, '.hints.DockerRequirement.dockerPull', nil)
         else
           nil
         end
@@ -98,11 +98,11 @@ def to_cmd(cwl, args)
 
   [
     *docker_cmd(cwl),
-    *cwl_fetch(cwl, 'baseCommand', []),
-    *cwl_fetch(cwl, 'arguments', []).map{ |body|
+    *cwl_fetch(cwl, '.baseCommand', []),
+    *cwl_fetch(cwl, '.arguments', []).map{ |body|
       to_input_param_args(cwl, nil, body)
     }.flatten(1),
-    *inspect_pos(cwl, 'inputs').map { |id, body|
+    *inspect_pos(cwl, '.inputs').map { |id, body|
       to_input_param_args(cwl, id, body, args)
     }.flatten(1)
   ].join(' ')
@@ -142,7 +142,7 @@ def exec_node(cmd)
 end
 
 def eval_expression(cwl, exp)
-  if cwl_fetch(cwl, 'requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
+  if cwl_fetch(cwl, '.requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
     fbody = exp.start_with?('(') ? "{ return #{exp}; }" : exp
     exec_node(fbody)
   else
@@ -198,26 +198,23 @@ def cwl_inspect(cwl, pos, args = [])
           YAML.load_file(cwl)
         end
   # TODO: validate CWL
-  if pos == 'commandline'
-    if inspect_pos(cwl, 'class') == 'Workflow'
-      raise "'commandline' can be used for CommandLineTool"
+  case pos
+  when /^\./
+    inspect_pos(cwl, pos)
+  when /^keys\((.+)\)$/
+    inspect_pos(cwl, $1).keys
+  when /^commandline$/
+    unless inspect_pos(cwl, '.class') == 'CommandLineTool'
+      raise 'commandline for CommandLineTool does not need an argument'
     end
     to_cmd(cwl, args)
-  elsif pos.start_with? '.'
-    unless args.empty?
-      raise "Invalid arguments: #{args}"
+  when /^commandline\((.+)\)$/
+    unless inspect_pos(cwl, '.class') == 'Workflow'
+      raise 'commandline for Workflow needs an argument'
     end
-    inspect_pos(cwl, pos[1..-1])
-  elsif pos.match(/^(.+)\(\.(.+)?\)$/)
-    op, pos_ = $1, $2
-    case op
-    when 'keys'
-      inspect_pos(cwl, pos_.nil? ? '' : pos_).keys
-    else
-      raise "Unknown operator: #{op}"
-    end
+    raise "Unsupported"
   else
-    raise "Error: pos should be .x.y.z, keys(.x.y.z) or 'commandline'"
+    raise "Unknown pos: #{pos}"
   end
 end
 
