@@ -140,7 +140,9 @@ def exec_node(cmd)
     process.stdout.write(JSON.stringify(`${e.name}: ${e.message}`))
   }
 EOS
-  JSON.load(IO.popen([node, '--eval', cmdstr]) { |io| io.gets })
+  ret = JSON.load(IO.popen([node, '--eval', cmdstr]) { |io| io.gets })
+  raise ret if ret.instance_of? String and ret.match(/^.+Error: .+$/)
+  ret
 end
 
 def eval_expression(cwl, exp)
