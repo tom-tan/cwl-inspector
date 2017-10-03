@@ -133,12 +133,14 @@ end
 
 def exec_node(cmd)
   node = node_bin
-  JSON.load(IO.popen([node, '--eval',
-                      "process.stdout.write(JSON.stringify((function() #{cmd})()))"]) { |io|
-              ret = io.gets
-              io.close_write
-              ret
-            })
+  cmdstr = <<-EOS
+  try{
+    process.stdout.write(JSON.stringify((function() #{cmd})()))
+  } catch(e) {
+    process.stdout.write(JSON.stringify(`${e.name}: ${e.message}`))
+  }
+EOS
+  JSON.load(IO.popen([node, '--eval', cmdstr]) { |io| io.gets })
 end
 
 def eval_expression(cwl, exp)
