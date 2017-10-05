@@ -14,7 +14,7 @@ class TestExpression < Test::Unit::TestCase
     rescue
       skip # if nodejs is not installed
     end
-    assert_equal(cwl_inspect("#{CWL_PATH}/expression.cwl", 'commandline'),
+    assert_equal(cwl_inspect("#{CWL_PATH}/expression/expression.cwl", 'commandline'),
                  'echo -A 2 -B baz -C 10 9 8 7 6 5 4 3 2 1')
   end
 end
