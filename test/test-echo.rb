@@ -29,7 +29,7 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_instantiated_commandline
-    assert_equal(cwl_inspect("#{CWL_PATH}/echo/echo.cwl", 'commandline', ['--input', 'Hello!']),
+    assert_equal(cwl_inspect("#{CWL_PATH}/echo/echo.cwl", 'commandline', { 'input' => 'Hello!' }),
                  'docker run -i --rm docker/whalesay cowsay Hello!')
   end
 

@@ -27,6 +27,14 @@ require 'yaml'
 require 'json'
 require 'optparse'
 
+def cwl_file_find(file, dir)
+  if File.exist? File.join(dir, file)
+    return File.join(dir, file)
+  end
+  # TODO: Search other lookup paths
+  nil
+end
+
 def inspect_pos(cwl, pos)
   pos[1..-1].split('.').reduce(cwl) { |cwl_, po|
     case po
@@ -94,8 +102,6 @@ def docker_cmd(cwl)
 end
 
 def to_cmd(cwl, args)
-  args = to_arg_map(args)
-
   [
     *docker_cmd(cwl),
     *cwl_fetch(cwl, '.baseCommand', []),
@@ -194,11 +200,32 @@ def to_input_param_args(cwl, id, body, params={})
   end
 end
 
-def cwl_inspect(cwl, pos, args = [])
-  cwl = if cwl == '-'
+def to_step_cmd(cwl, step, dir, args)
+  step_ = inspect_pos(cwl, step)
+  step_cmd = step_['run']
+  case step_cmd
+  when String
+    step_cwl = cwl_file_find(step_cmd, dir)
+    raise "File not found: #{step_cmd} defind in step #{step}" if step_cwl.nil?
+    step_args = Hash[step_['in'].map{ |k, v|
+                       v = "[#{v}]" if v.include? '/'
+                       if args.include? v
+                         [k, args[v]]
+                       else
+                         [k, "$#{v}"]
+                       end
+                     }]
+    cwl_inspect(step_cwl, 'commandline', step_args)
+  else
+    raise 'Unsupported'
+  end
+end
+
+def cwl_inspect(cwlfile, pos, args = {})
+  cwl = if cwlfile == '-'
           YAML.load_stream(STDIN)[0]
         else
-          YAML.load_file(cwl)
+          YAML.load_file(cwlfile)
         end
   # TODO: validate CWL
   case pos
@@ -208,14 +235,14 @@ def cwl_inspect(cwl, pos, args = [])
     inspect_pos(cwl, $1).keys
   when /^commandline$/
     unless inspect_pos(cwl, '.class') == 'CommandLineTool'
-      raise 'commandline for CommandLineTool does not need an argument'
+      raise 'commandline for Workflow needs an argument'
     end
     to_cmd(cwl, args)
   when /^commandline\((.+)\)$/
     unless inspect_pos(cwl, '.class') == 'Workflow'
-      raise 'commandline for Workflow needs an argument'
+      raise 'commandline for CommandLineTool does not need an argument'
     end
-    raise "Unsupported"
+    to_step_cmd(cwl, $1, File.dirname(cwlfile), args)
   else
     raise "Unknown pos: #{pos}"
   end
@@ -239,6 +266,6 @@ if $0 == __FILE__
   end
 
   cwl, pos, *args = ARGV
-  args = args.map{ |a| a.split('=') }.flatten
+  args = to_arg_map(args.map{ |a| a.split('=') }.flatten)
   puts fmt.call cwl_inspect(cwl, pos, args)
 end
