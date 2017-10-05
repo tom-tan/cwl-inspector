@@ -117,7 +117,6 @@ def to_arg_map(args)
     }]
 end
 
-
 def node_bin
   if $nodejs
     raise "#{$nodejs} is not executable or does not exist" unless File.executable? $nodejs
