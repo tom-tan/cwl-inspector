@@ -203,30 +203,27 @@ end
 def to_step_cmd(cwl, step, dir, args)
   step_ = inspect_pos(cwl, step)
   step_cmd = step_['run']
+  step_args = Hash[step_['in'].map{ |k, v|
+                     v = "[#{v}]" if v.include? '/'
+                     if args.include? v
+                       [k, args[v]]
+                     else
+                       [k, "$#{v}"]
+                     end
+                   }]
   case step_cmd
   when String
-    step_cwl = cwl_file_find(step_cmd, dir)
-    raise "File not found: #{step_cmd} defind in step #{step}" if step_cwl.nil?
-    step_args = Hash[step_['in'].map{ |k, v|
-                       v = "[#{v}]" if v.include? '/'
-                       if args.include? v
-                         [k, args[v]]
-                       else
-                         [k, "$#{v}"]
-                       end
-                     }]
-    cwl_inspect(step_cwl, 'commandline', step_args)
+    step_cwl_file = cwl_file_find(step_cmd, dir)
+    raise "File not found: #{step_cmd} defind in step #{step}" if step_cwl_file.nil?
+    step_cwl = YAML.load_file(step_cwl_file)
   else
-    raise 'Unsupported'
+    step_cwl = step_cmd
   end
+  # TODO: How to handle workflows and expressions for 'commandline'?
+  cwl_inspect(step_cwl, 'commandline', dir, step_args)
 end
 
-def cwl_inspect(cwlfile, pos, args = {})
-  cwl = if cwlfile == '-'
-          YAML.load_stream(STDIN)[0]
-        else
-          YAML.load_file(cwlfile)
-        end
+def cwl_inspect(cwl, pos, dir = nil, args = {})
   # TODO: validate CWL
   case pos
   when /^\./
@@ -242,7 +239,7 @@ def cwl_inspect(cwlfile, pos, args = {})
     unless inspect_pos(cwl, '.class') == 'Workflow'
       raise 'commandline for CommandLineTool does not need an argument'
     end
-    to_step_cmd(cwl, $1, File.dirname(cwlfile), args)
+    to_step_cmd(cwl, $1, dir, args)
   else
     raise "Unknown pos: #{pos}"
   end
@@ -265,7 +262,12 @@ if $0 == __FILE__
     exit
   end
 
-  cwl, pos, *args = ARGV
+  cwlfile, pos, *args = ARGV
   args = to_arg_map(args.map{ |a| a.split('=') }.flatten)
-  puts fmt.call cwl_inspect(cwl, pos, args)
+  cwl = if cwlfile == '-'
+          YAML.load_stream(STDIN)[0]
+        else
+          YAML.load_file(cwlfile)
+        end
+  puts fmt.call cwl_inspect(cwl, pos, File.dirname(cwlfile), args)
 end
