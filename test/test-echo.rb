@@ -14,38 +14,38 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_version
-    assert_equal(cwl_inspect(@cwl, '.cwlVersion'),
-                 'v1.0')
+    assert_equal('v1.0',
+                 cwl_inspect(@cwl, '.cwlVersion'))
   end
 
   def test_id_based_access
-    assert_equal(cwl_inspect(@cwl, '.inputs.input.label'),
-                 'Input string')
+    assert_equal('Input string',
+                 cwl_inspect(@cwl, '.inputs.input.label'))
   end
 
   def test_index_based_access
-    assert_equal(cwl_inspect(@cwl, '.inputs.0.label'),
-                 'Input string')
+    assert_equal('Input string',
+                 cwl_inspect(@cwl, '.inputs.0.label'))
   end
 
   def test_commandline
-    assert_equal(cwl_inspect(@cwl, 'commandline'),
-                 'docker run -i --rm docker/whalesay cowsay [ $input ]')
+    assert_equal('docker run -i --rm docker/whalesay cowsay [ $input ]',
+                 cwl_inspect(@cwl, 'commandline'))
   end
 
   def test_instantiated_commandline
-    assert_equal(cwl_inspect(@cwl, 'commandline', nil, { 'input' => 'Hello!' }),
-                 'docker run -i --rm docker/whalesay cowsay Hello!')
+    assert_equal('docker run -i --rm docker/whalesay cowsay Hello!',
+                 cwl_inspect(@cwl, 'commandline', nil, { 'input' => 'Hello!' }))
   end
 
   def test_root_keys
-    assert_equal(cwl_inspect(@cwl, 'keys(.)'),
-                 ['class', 'cwlVersion', 'id', 'baseCommand',
-                  'inputs', 'outputs', 'requirements'])
+    assert_equal(['class', 'cwlVersion', 'id', 'baseCommand',
+                  'inputs', 'outputs', 'requirements'],
+                 cwl_inspect(@cwl, 'keys(.)'))
   end
 
   def test_keys
-    assert_equal(cwl_inspect(@cwl, 'keys(.inputs)'),
-                 ['input'])
+    assert_equal(['input'],
+                 cwl_inspect(@cwl, 'keys(.inputs)'))
   end
 end
