@@ -15,18 +15,18 @@ class TestWorkflow < Test::Unit::TestCase
   end
 
   def test_steps
-    assert_equal(cwl_inspect(@cwl, 'keys(.steps)', @cwldir),
-                 ['untar', 'compile'])
+    assert_equal(['untar', 'compile'],
+                 cwl_inspect(@cwl, 'keys(.steps)', @cwldir))
   end
 
   def test_step_commandline
-    assert_equal(cwl_inspect(@cwl, 'commandline(.steps.untar)', @cwldir),
-                 'tar xf $inp $ex')
+    assert_equal('tar xf $inp $ex',
+                 cwl_inspect(@cwl, 'commandline(.steps.untar)', @cwldir))
   end
 
   def test_step_instantiated_commandline
-    assert_equal(cwl_inspect(@cwl, 'commandline(.steps.untar)', @cwldir,
-                             { 'inp' => 'foo.tar', 'ex' => 'bar.java' }),
-                 'tar xf foo.tar bar.java')
+    assert_equal('tar xf foo.tar bar.java',
+                 cwl_inspect(@cwl, 'commandline(.steps.untar)', @cwldir,
+                             { 'inp' => 'foo.tar', 'ex' => 'bar.java' }))
   end
 end
