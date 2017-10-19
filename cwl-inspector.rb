@@ -26,6 +26,7 @@
 require 'yaml'
 require 'json'
 require 'optparse'
+require 'digest/sha1'
 
 def cwl_file_find(file, dir)
   if File.exist? File.join(dir, file)
@@ -231,7 +232,15 @@ def init_inputs_context(cwl, args)
       File.basename(args[k]).sub(/#{ext}$/, '') ##
     }
     add_val.call(key, 'nameext') { |k| File.extname(args[k]) }
-    # add_val.call(key, 'checksum') { raise 'Not implemented' }
+    add_val.call(key, 'checksum') { |k|
+      file = args[k]
+      if File.exist? file
+        digest = Digest::SHA1.hexdigest(File.open(file, 'rb').read)
+        "sha1$#{digest}"
+      else
+        "$(inputs.#{k}.checksum)"
+      end
+    }
     add_val.call(key, 'size') { |k|
       file = args[k]
       if File.exist? file
