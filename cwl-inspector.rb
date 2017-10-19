@@ -108,7 +108,13 @@ def to_cmd(cwl, args)
     *cwl_fetch(cwl, '.arguments', []).map{ |body|
       to_input_param_args(cwl, nil, body)
     }.flatten(1),
-    *inspect_pos(cwl, '.inputs').map { |id, body|
+    *cwl_fetch(cwl, '.inputs', []).find_all{ |id, body|
+      body.include? 'inputBinding'
+    }.each_with_index.sort_by{ |id_body, idx|
+      [id_body[1]['inputBinding'].fetch('position', 0), idx]
+    }.map{ |id_body, idx|
+      id_body
+    }.map { |id, body|
       to_input_param_args(cwl, id, body, args)
     }.flatten(1)
   ].join(' ')
