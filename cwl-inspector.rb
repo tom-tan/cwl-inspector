@@ -170,7 +170,7 @@ def eval_expression(cwl, exp)
 end
 
 def to_input_param_args(cwl, id, body, params={})
-  return body if body.instance_of? String
+  return instantiate_context(cwl, body, params) if body.instance_of? String
 
   input = id.nil? ? nil : params.fetch(id, "$#{id}")
   param = if body.include? 'valueFrom'
@@ -203,6 +203,116 @@ def to_input_param_args(cwl, id, body, params={})
     ['[', *argstrs, ']']
   else
     argstrs
+  end
+end
+
+def init_inputs_context(cwl, args)
+  context = Hash.new
+  add_val = ->(key, field, &exp) {
+    k = if field.nil?
+          "$(inputs.#{key})"
+        else
+          "$(inputs.#{key}.#{field})"
+        end
+    context[k] = if args.include? key
+                   exp.call key
+                 else
+                   k
+                 end
+  }
+  cwl_fetch(cwl, '.inputs', {}).each{ |key, v|
+    add_val.call(key, nil) { |k| args[k] }
+    # add_val.call(key, 'location') { raise 'Not implemented' }
+    add_val.call(key, 'path') { |k| File.absolute_path(args[k]) }
+    add_val.call(key, 'basename') { |k| File.basename(args[k]) }
+    add_val.call(key, 'dirname') { |k| File.dirname(args[k]) }
+    add_val.call(key, 'nameroot') { |k|
+      ext = File.extname(args[k])
+      File.basename(args[k]).sub(/#{ext}$/, '') ##
+    }
+    add_val.call(key, 'nameext') { |k| File.extname(args[k]) }
+    # add_val.call(key, 'checksum') { raise 'Not implemented' }
+    add_val.call(key, 'size') { |k|
+      file = args[k]
+      if File.exist? file
+        File.size(file)
+      else
+        "$(inputs.#{k}.size)"
+      end
+    }
+    # add_val.call(key, 'format') { raise 'Not implemented' }
+    add_val.call(key, 'contents') { |k|
+      file = args[k]
+      if File.exist? file
+        File.open(file) { |io|
+          io.read(64*2**10)
+        }
+      else
+        "$(inputs.#{k}.contents)"
+      end
+    }
+  }
+  context
+end
+
+def init_self_context(cwl, args)
+  {}
+end
+
+def init_runtime_context()
+  context = Hash.new
+  runtime_map = {
+    '$(runtime.outdir)' => 'outdir',
+    '$(runtime.tmpdir)' => 'tmpdir',
+    '$(runtime.cores)' => 'cores',
+    '$(runtime.ram)' => 'ram',
+    '$(runtime.outdirSize)' => 'outdirSize',
+    '$(runtime.tmpdirSize)' => 'tmpdirSize',
+  }
+  runtime_map.each{ |k, v|
+    context[k] = $runtime.fetch(v, k)
+  }
+  context
+end
+
+def instantiate_context(cwl, pat, args)
+  ret = init_runtime_context().reduce(pat) { |r, kv|
+    r.gsub(*kv)
+  }
+
+  ret = init_inputs_context(cwl, args).reduce(ret) { |r, kv|
+    r.gsub(*kv)
+  }
+
+  init_self_context(cwl, args).reduce(ret) { |r, kv|
+    r.gsub(*kv)
+  }
+end
+
+def ls_outputs_for_cmd(cwl, id, args)
+  unless cwl_fetch(cwl, id, false)
+    raise "Invalid pos #{id}"
+  end
+  oBinding = cwl_fetch(cwl, "#{id}.outputBinding", nil)
+  if oBinding.nil?
+    raise "Not yet supported for outputs without outputBinding"
+  end
+  if oBinding.include? 'glob'
+    pat = oBinding['glob']
+    if pat.match(/\$\(.+\)/)
+      pat = instantiate_context(cwl, pat, args)
+    end
+    if pat.include? '*' or pat.include? '?' or pat.include? '['
+      Dir.glob($runtime.fetch('outdir', '')+'/'+pat)
+    else
+      pat
+    end
+  end
+end
+
+def ls_outputs_for_workflow(cwl, id, dir, args)
+  if cwl_fetch(cwl, id, false)
+    raise "Invalid pos #{id}"
   end
 end
 
@@ -246,6 +356,24 @@ def cwl_inspect(cwl, pos, dir = nil, args = {})
       raise 'commandline for CommandLineTool does not need an argument'
     end
     to_step_cmd(cwl, $1, dir, args)
+  when /^ls\((\.outputs\..+)\)$/
+    # TODO: Is .steps.foo enough?
+    # How about .steps.foo.out1?
+    case inspect_pos(cwl, '.class')
+    when 'Workflow'
+      raise "Not yet implemented it for Workflow"
+      ls_outputs_for_workflow(cwl, $1, dir, args)
+    when 'CommandLineTool'
+      ls_outputs_for_cmd(cwl, $1, args)
+    else
+      raise "Unsupported class #{inspect_pos(cwl, '.class')}"
+    end
+  when /^ls\((\.steps\..+)\)$/
+    unless inspect_pos(cwl, '.class') == 'Workflow'
+      raise "ls outputs for steps does not work for CommandLineTool"
+    end
+    raise "Not yet implemented"
+    ls_outputs_for_workflow(cwl, $1, dir, args)
   else
     raise "Unknown pos: #{pos}"
   end
@@ -253,6 +381,7 @@ end
 
 if $0 == __FILE__
   fmt = ->(a) { a }
+  $runtime = Hash.new(nil)
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} cwl pos"
   opt.on('--yaml', 'print in YAML format') {
@@ -260,6 +389,12 @@ if $0 == __FILE__
   }
   opt.on('--nodejs-bin=NODE', 'path to nodejs for InlineJavascriptRequirement') { |nodejs|
     $nodejs = nodejs
+  }
+  opt.on('--runtime.outdir=DIR', 'directory for outputs') { |dir|
+    $runtime['outdir'] = dir
+  }
+  opt.on('--runtime.tmpdir=DIR', 'directory for temporary files') { |dir|
+    $runtime['tmpdir'] = dir
   }
   opt.parse!(ARGV)
 
