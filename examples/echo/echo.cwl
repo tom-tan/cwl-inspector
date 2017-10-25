@@ -14,6 +14,7 @@ outputs:
   - id: output
     type: string?
     outputBinding: {}
+  - type: Filea
 requirements:
   - class: DockerRequirement
     dockerPull: docker/whalesay

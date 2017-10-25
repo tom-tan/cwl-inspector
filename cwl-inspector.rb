@@ -102,12 +102,12 @@ def docker_cmd(cwl)
   end
 end
 
-def to_cmd(cwl, args)
+def to_cmd(cwl, settings)
   [
     *docker_cmd(cwl),
     *cwl_fetch(cwl, '.baseCommand', []),
     *cwl_fetch(cwl, '.arguments', []).map{ |body|
-      to_input_param_args(cwl, nil, body)
+      to_input_param_args(cwl, nil, body, settings)
     }.flatten(1),
     *cwl_fetch(cwl, '.inputs', []).find_all{ |id, body|
       body.include? 'inputBinding'
@@ -116,7 +116,7 @@ def to_cmd(cwl, args)
     }.map{ |id_body, idx|
       id_body
     }.map { |id, body|
-      to_input_param_args(cwl, id, body, args)
+      to_input_param_args(cwl, id, body, settings)
     }.flatten(1)
   ].join(' ')
 end
@@ -170,37 +170,38 @@ def eval_expression(cwl, exp)
   end
 end
 
-def to_input_param_args(cwl, id, body, params={})
-  return instantiate_context(cwl, body, params) if body.instance_of? String
+def to_input_param_args(cwl, id, body, settings)
+  return instantiate_context(cwl, body, settings) if body.instance_of? String
 
-  input = id.nil? ? nil : params.fetch(id, "$#{id}")
-  param = if body.include? 'valueFrom'
+  value = if body.include? 'valueFrom'
             e = body['valueFrom'].match(/^\s*(.+)\s*$/m)[1]
             if e.start_with? '$'
               # it may use `input`
+              e = instantiate_context(cwl, e, settings)
               eval_expression(cwl, e[1..-1])
             else
               e
             end
           else
-            input
+            id.nil? ? nil : settings[:args].fetch(id, "$#{id}")
           end
-  if param.instance_of? Array
+
+  if value.instance_of? Array
     # TODO: Check the behavior if itemSeparator is missing
-    param = param.join(body.fetch('itemSeparator', ' '))
+    value = value.join(body.fetch('itemSeparator', ' '))
   end
 
   pre = body.fetch('prefix', nil)
   argstrs = if pre
               if body.fetch('separate', false)
-                [pre, param].join('')
+                [pre, value].join('')
               else
-                [pre, param]
+                [pre, value]
               end
             else
-              [param]
+              [value]
             end
-  if param == "$#{id}" and body.fetch('type', '').end_with?('?')
+  if value == "$#{id}" and body.fetch('type', '').end_with?('?')
     ['[', *argstrs, ']']
   else
     argstrs
@@ -229,7 +230,7 @@ def init_inputs_context(cwl, args)
     add_val.call(key, 'dirname') { |k| File.dirname(args[k]) }
     add_val.call(key, 'nameroot') { |k|
       ext = File.extname(args[k])
-      File.basename(args[k]).sub(/#{ext}$/, '') ##
+      File.basename(settings[k]).sub(/#{ext}$/, '')
     }
     add_val.call(key, 'nameext') { |k| File.extname(args[k]) }
     add_val.call(key, 'checksum') { |k|
@@ -268,7 +269,7 @@ def init_self_context(cwl, args)
   {}
 end
 
-def init_runtime_context()
+def init_runtime_context(runtime)
   context = Hash.new
   runtime_map = {
     '$(runtime.outdir)' => 'outdir',
@@ -279,26 +280,26 @@ def init_runtime_context()
     '$(runtime.tmpdirSize)' => 'tmpdirSize',
   }
   runtime_map.each{ |k, v|
-    context[k] = $runtime.fetch(v, k)
+    context[k] = runtime.fetch(v, k)
   }
   context
 end
 
-def instantiate_context(cwl, pat, args)
-  ret = init_runtime_context().reduce(pat) { |r, kv|
+def instantiate_context(cwl, pat, settings)
+  ret = init_runtime_context(settings[:runtime]).reduce(pat) { |r, kv|
     r.gsub(*kv)
   }
 
-  ret = init_inputs_context(cwl, args).reduce(ret) { |r, kv|
+  ret = init_inputs_context(cwl, settings[:args]).reduce(ret) { |r, kv|
     r.gsub(*kv)
   }
 
-  init_self_context(cwl, args).reduce(ret) { |r, kv|
+  init_self_context(cwl, settings).reduce(ret) { |r, kv|
     r.gsub(*kv)
   }
 end
 
-def ls_outputs_for_cmd(cwl, id, args)
+def ls_outputs_for_cmd(cwl, id, settings)
   unless cwl_fetch(cwl, id, false)
     raise "Invalid pos #{id}"
   end
@@ -309,7 +310,7 @@ def ls_outputs_for_cmd(cwl, id, args)
   if oBinding.include? 'glob'
     pat = oBinding['glob']
     if pat.match(/\$\(.+\)/)
-      pat = instantiate_context(cwl, pat, args)
+      pat = instantiate_context(cwl, pat, settings)
     end
     if pat.include? '*' or pat.include? '?' or pat.include? '['
       Dir.glob($runtime.fetch('outdir', '')+'/'+pat)
@@ -319,19 +320,19 @@ def ls_outputs_for_cmd(cwl, id, args)
   end
 end
 
-def ls_outputs_for_workflow(cwl, id, dir, args)
+def ls_outputs_for_workflow(cwl, id, dir, settings)
   if cwl_fetch(cwl, id, false)
     raise "Invalid pos #{id}"
   end
 end
 
-def to_step_cmd(cwl, step, dir, args)
+def to_step_cmd(cwl, step, dir, settings)
   step_ = inspect_pos(cwl, step)
   step_cmd = step_['run']
   step_args = Hash[step_['in'].map{ |k, v|
                      v = "[#{v}]" if v.include? '/'
-                     if args.include? v
-                       [k, args[v]]
+                     if settings[:args].include? v
+                       [k, settings[:args][v]]
                      else
                        [k, "$#{v}"]
                      end
@@ -345,10 +346,11 @@ def to_step_cmd(cwl, step, dir, args)
     step_cwl = step_cmd
   end
   # TODO: How to handle workflows and expressions for 'commandline'?
-  cwl_inspect(step_cwl, 'commandline', dir, step_args)
+  cwl_inspect(step_cwl, 'commandline', dir,
+              { :runtime => settings[:runtime], :args => step_args })
 end
 
-def cwl_inspect(cwl, pos, dir = nil, args = {})
+def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
   # TODO: validate CWL
   case pos
   when /^\./
@@ -359,21 +361,21 @@ def cwl_inspect(cwl, pos, dir = nil, args = {})
     unless inspect_pos(cwl, '.class') == 'CommandLineTool'
       raise 'commandline for Workflow needs an argument'
     end
-    to_cmd(cwl, args)
+    to_cmd(cwl, settings)
   when /^commandline\((.+)\)$/
     unless inspect_pos(cwl, '.class') == 'Workflow'
       raise 'commandline for CommandLineTool does not need an argument'
     end
-    to_step_cmd(cwl, $1, dir, args)
+    to_step_cmd(cwl, $1, dir, settings)
   when /^ls\((\.outputs\..+)\)$/
     # TODO: Is .steps.foo enough?
     # How about .steps.foo.out1?
     case inspect_pos(cwl, '.class')
     when 'Workflow'
       raise "Not yet implemented it for Workflow"
-      ls_outputs_for_workflow(cwl, $1, dir, args)
+      ls_outputs_for_workflow(cwl, $1, dir, settings)
     when 'CommandLineTool'
-      ls_outputs_for_cmd(cwl, $1, args)
+      ls_outputs_for_cmd(cwl, $1, settings)
     else
       raise "Unsupported class #{inspect_pos(cwl, '.class')}"
     end
@@ -382,7 +384,7 @@ def cwl_inspect(cwl, pos, dir = nil, args = {})
       raise "ls outputs for steps does not work for CommandLineTool"
     end
     raise "Not yet implemented"
-    ls_outputs_for_workflow(cwl, $1, dir, args)
+    ls_outputs_for_workflow(cwl, $1, dir, settings)
   else
     raise "Unknown pos: #{pos}"
   end
@@ -390,7 +392,8 @@ end
 
 if $0 == __FILE__
   fmt = ->(a) { a }
-  $runtime = Hash.new(nil)
+  runtime = Hash.new(nil)
+  input = nil
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} cwl pos"
   opt.on('--yaml', 'print in YAML format') {
@@ -400,10 +403,13 @@ if $0 == __FILE__
     $nodejs = nodejs
   }
   opt.on('--runtime.outdir=DIR', 'directory for outputs') { |dir|
-    $runtime['outdir'] = dir
+    runtime['outdir'] = dir
   }
   opt.on('--runtime.tmpdir=DIR', 'directory for temporary files') { |dir|
-    $runtime['tmpdir'] = dir
+    runtime['tmpdir'] = dir
+  }
+  opt.on('-i YML', 'input parameters') { |yml|
+    input = yml
   }
   opt.parse!(ARGV)
 
@@ -413,11 +419,26 @@ if $0 == __FILE__
   end
 
   cwlfile, pos, *args = ARGV
-  args = to_arg_map(args.map{ |a| a.split('=') }.flatten)
+
+  args = if not(input.nil?) and not(args.empty?)
+           raise "Error: -i yml and -- --param1 p1 are exclusive"
+         elsif not input.nil?
+           YAML.load_file(inputs)
+         elsif not args.empty?
+           to_arg_map(args.map{ |a| a.split('=') }.flatten)
+         else
+           Hash.new(nil)
+         end
+
   cwl = if cwlfile == '-'
           YAML.load_stream(STDIN)[0]
         else
           YAML.load_file(cwlfile)
         end
-  puts fmt.call cwl_inspect(cwl, pos, File.dirname(cwlfile), args)
+
+  settings = {
+    :runtime => runtime,
+    :args => args,
+  }
+  puts fmt.call cwl_inspect(cwl, pos, File.dirname(cwlfile), settings)
 end

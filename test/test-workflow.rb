@@ -27,6 +27,6 @@ class TestWorkflow < Test::Unit::TestCase
   def test_step_instantiated_commandline
     assert_equal('tar xf foo.tar bar.java',
                  cwl_inspect(@cwl, 'commandline(.steps.untar)', @cwldir,
-                             { 'inp' => 'foo.tar', 'ex' => 'bar.java' }))
+                             { :runtime => {}, :args => { 'inp' => 'foo.tar', 'ex' => 'bar.java' }}))
   end
 end
