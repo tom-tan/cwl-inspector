@@ -143,11 +143,12 @@ def node_bin
   end
 end
 
-def exec_node(cmd)
+def exec_node(fun)
   node = node_bin
   cmdstr = <<-EOS
+  'use strict'
   try{
-    process.stdout.write(JSON.stringify((function() #{cmd})()))
+    process.stdout.write(JSON.stringify((#{fun})()))
   } catch(e) {
     process.stdout.write(JSON.stringify(`${e.name}: ${e.message}`))
   }
@@ -157,16 +158,36 @@ EOS
   ret
 end
 
-def eval_expression(cwl, exp)
+def eval_expression(cwl, exp, settings)
   if cwl_fetch(cwl, '.requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
-    fbody = exp.start_with?('(') ? "{ return #{exp}; }" : exp
+    ret = exp.start_with?('{') ? "(function() #{exp})()" : exp[1..-2]
+    fbody = <<EOS
+function() {
+  const runtime = #{JSON.dump(settings[:runtime])};
+  const inputs = #{JSON.dump(init_inputs_context(cwl, settings[:args]))};
+  const self = null;
+  return #{ret};
+}
+EOS
     exec_node(fbody)
   else
-    # inputs
-    # runtime
-    # runtime.outdir
-    # self
-    exp
+    fields = exp[1..-2].split('.')
+    context = case fields.first
+              when 'runtime'
+                settings[:runtime]
+              when 'inputs'
+                init_inputs_context(cwl, settings[:args])
+              when 'self'
+              else
+                raise "Invalid context: #{fields}"
+              end
+    fields[1..-1].reduce(context){ |con, f|
+      if con.include? f
+        con.fetch(f, exp)
+      else
+        break "$#{exp[1..-2]}"
+      end
+    }
   end
 end
 
@@ -174,14 +195,8 @@ def to_input_param_args(cwl, id, body, settings)
   return instantiate_context(cwl, body, settings) if body.instance_of? String
 
   value = if body.include? 'valueFrom'
-            e = body['valueFrom'].match(/^\s*(.+)\s*$/m)[1]
-            if e.start_with? '$'
-              # it may use `input`
-              e = instantiate_context(cwl, e, settings)
-              eval_expression(cwl, e[1..-1])
-            else
-              e
-            end
+            str = body['valueFrom'].match(/^\s*(.+)\s*$/m)[1].chomp
+            instantiate_context(cwl, str, settings)
           else
             id.nil? ? nil : settings[:args].fetch(id, "$#{id}")
           end
@@ -209,94 +224,77 @@ def to_input_param_args(cwl, id, body, settings)
 end
 
 def init_inputs_context(cwl, args)
-  context = Hash.new
-  add_val = ->(key, field, &exp) {
-    k = if field.nil?
-          "$(inputs.#{key})"
-        else
-          "$(inputs.#{key}.#{field})"
-        end
-    context[k] = if args.include? key
-                   exp.call key
-                 else
-                   k
-                 end
-  }
-  cwl_fetch(cwl, '.inputs', {}).each{ |key, v|
-    add_val.call(key, nil) { |k| args[k] }
-    # add_val.call(key, 'location') { raise 'Not implemented' }
-    add_val.call(key, 'path') { |k| File.absolute_path(args[k]) }
-    add_val.call(key, 'basename') { |k| File.basename(args[k]) }
-    add_val.call(key, 'dirname') { |k| File.dirname(args[k]) }
-    add_val.call(key, 'nameroot') { |k|
-      ext = File.extname(args[k])
-      File.basename(settings[k]).sub(/#{ext}$/, '')
-    }
-    add_val.call(key, 'nameext') { |k| File.extname(args[k]) }
-    add_val.call(key, 'checksum') { |k|
+  ret = cwl_fetch(cwl, '.inputs', {}).select{ |k, v| args.include? k }.map{ |k, v|
+    case v.fetch('type', nil)
+    when 'File'
+      # inputs.*
+      # inputs.*.location
       file = args[k]
+      hash = {
+        'class' => 'File',
+        'path' => File.absolute_path(file),
+        'basename' => File.basename(file),
+        'dirname' => File.dirname(file),
+        'nameroot' => File.basename(file).sub(File.extname(file), ''),
+        'nameext' => File.extname(file),
+      }
+
+      if v.include? 'format'
+        hash['format'] = v['format']
+      end
+
       if File.exist? file
         digest = Digest::SHA1.hexdigest(File.open(file, 'rb').read)
-        "sha1$#{digest}"
-      else
-        "$(inputs.#{k}.checksum)"
-      end
-    }
-    add_val.call(key, 'size') { |k|
-      file = args[k]
-      if File.exist? file
-        File.size(file)
-      else
-        "$(inputs.#{k}.size)"
-      end
-    }
-    # add_val.call(key, 'format') { raise 'Not implemented' }
-    add_val.call(key, 'contents') { |k|
-      file = args[k]
-      if File.exist? file
-        File.open(file) { |io|
+        hash['checksum'] = "sha1$#{digest}"
+        hash['size'] = File.size(file)
+        hash['contents'] = File.open(file) { |io|
           io.read(64*2**10)
         }
-      else
-        "$(inputs.#{k}.contents)"
       end
-    }
-  }
-  context
+      [k, hash]
+    when 'Directory'
+      dir = args[k]
+      hash = {
+        'class' => 'Drectory',
+        'path' => File.absolute_path(dir),
+        'basename' => File.basename(dir),
+      }
+      if Dir.exist? dir
+        hash['listing'] = Dir.entries(dir).select{ |e| not e.match(/^\.+$/) }
+      end
+    else
+      [k, v]
+    end
+  }.flatten(1)
+  Hash[*ret]
 end
 
 def init_self_context(cwl, args)
   {}
 end
 
-def init_runtime_context(runtime)
-  context = Hash.new
-  runtime_map = {
-    '$(runtime.outdir)' => 'outdir',
-    '$(runtime.tmpdir)' => 'tmpdir',
-    '$(runtime.cores)' => 'cores',
-    '$(runtime.ram)' => 'ram',
-    '$(runtime.outdirSize)' => 'outdirSize',
-    '$(runtime.tmpdirSize)' => 'tmpdirSize',
-  }
-  runtime_map.each{ |k, v|
-    context[k] = runtime.fetch(v, k)
-  }
-  context
-end
-
-def instantiate_context(cwl, pat, settings)
-  ret = init_runtime_context(settings[:runtime]).reduce(pat) { |r, kv|
-    r.gsub(*kv)
-  }
-
-  ret = init_inputs_context(cwl, settings[:args]).reduce(ret) { |r, kv|
-    r.gsub(*kv)
-  }
-
-  init_self_context(cwl, settings).reduce(ret) { |r, kv|
-    r.gsub(*kv)
-  }
+def instantiate_context(cwl, str, settings)
+  if str.match(/\$(\(.+\))/m) or str.match(/\$(\{.+\})/m)
+    # current assumption: Expression is included at most once
+    # TODO: extend it to satisfy the spec
+    pre, post = $~.pre_match, $~.post_match
+    begin
+      exp, evaled = $~[0], eval_expression(cwl, $1, settings)
+      if pre.empty? and post.empty?
+        evaled
+      else
+        str.sub(exp, evaled)
+      end
+    rescue => e
+      if e.to_s.match(/^.+Error/)
+        str
+      else
+        raise e
+      end
+    end
+  else
+    str
+  end
 end
 
 def ls_outputs_for_cmd(cwl, id, settings)
@@ -308,12 +306,9 @@ def ls_outputs_for_cmd(cwl, id, settings)
     raise "Not yet supported for outputs without outputBinding"
   end
   if oBinding.include? 'glob'
-    pat = oBinding['glob']
-    if pat.match(/\$\(.+\)/)
-      pat = instantiate_context(cwl, pat, settings)
-    end
+    pat = instantiate_context(cwl, oBinding['glob'], settings)
     if pat.include? '*' or pat.include? '?' or pat.include? '['
-      Dir.glob($runtime.fetch('outdir', '')+'/'+pat)
+      Dir.glob(settings[:runtime].fetch('outdir', '')+'/'+pat)
     else
       pat
     end

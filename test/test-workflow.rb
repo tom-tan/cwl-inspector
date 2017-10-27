@@ -14,6 +14,14 @@ class TestWorkflow < Test::Unit::TestCase
     @cwl = YAML.load_file(File.join(@cwldir, '1st-workflow.cwl'))
   end
 
+  def test_arguments
+    cwl = YAML.load_file(File.join(@cwldir, 'arguments.cwl'))
+    assert_equal('docker run -i --rm java:7-jdk javac -d tmp Foo.java',
+                 cwl_inspect(cwl, 'commandline', @cwldir,
+                             { :runtime => { 'outdir' => 'tmp' },
+                               :args => { 'src' => 'Foo.java' }}))
+  end
+
   def test_steps
     assert_equal(['untar', 'compile'],
                  cwl_inspect(@cwl, 'keys(.steps)', @cwldir))
