@@ -117,7 +117,18 @@ def to_cmd(cwl, settings)
       id_body
     }.map { |id, body|
       to_input_param_args(cwl, id, body, settings)
-    }.flatten(1)
+    }.flatten(1),
+    *if cwl_fetch(cwl, '.stdout', nil) or
+      not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
+      fname = cwl_fetch(cwl, '.stdout', nil)
+      if fname
+        ['>', instantiate_context(cwl, fname, settings)]
+      else
+        ['>', '$randomized_filename']
+      end
+    else
+      []
+    end
   ].join(' ')
 end
 

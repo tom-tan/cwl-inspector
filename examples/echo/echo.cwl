@@ -11,10 +11,9 @@ inputs:
     label: Input string
     doc: This is an input string
 outputs:
-  - id: output
-    type: string?
-    outputBinding: {}
-  - type: Filea
+  output:
+    type: stdout
+stdout: output
 requirements:
   - class: DockerRequirement
     dockerPull: docker/whalesay
