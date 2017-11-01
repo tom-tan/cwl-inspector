@@ -312,16 +312,25 @@ def ls_outputs_for_cmd(cwl, id, settings)
   unless cwl_fetch(cwl, id, false)
     raise "Invalid pos #{id}"
   end
-  oBinding = cwl_fetch(cwl, "#{id}.outputBinding", nil)
-  if oBinding.nil?
-    raise "Not yet supported for outputs without outputBinding"
-  end
-  if oBinding.include? 'glob'
-    pat = instantiate_context(cwl, oBinding['glob'], settings)
-    if pat.include? '*' or pat.include? '?' or pat.include? '['
-      Dir.glob(settings[:runtime].fetch('outdir', '')+'/'+pat)
+  if cwl_fetch(cwl, "#{id}.type", '') == 'stdout'
+    fname = cwl_fetch(cwl, ".stdout", nil)
+    if fname
+      instantiate_context(cwl, fname, settings)
     else
-      pat
+      '$randomized_filename'
+    end
+  else
+    oBinding = cwl_fetch(cwl, "#{id}.outputBinding", nil)
+    if oBinding.nil?
+      raise "Not yet supported for outputs without outputBinding"
+    end
+    if oBinding.include? 'glob'
+      pat = instantiate_context(cwl, oBinding['glob'], settings)
+      if pat.include? '*' or pat.include? '?' or pat.include? '['
+        Dir.glob(settings[:runtime].fetch('outdir', '')+'/'+pat)
+      else
+        pat
+      end
     end
   end
 end
