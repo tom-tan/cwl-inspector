@@ -35,7 +35,8 @@ class TestEcho < Test::Unit::TestCase
 
   def test_instantiated_commandline
     assert_equal('docker run -i --rm docker/whalesay cowsay Hello! > output',
-                 cwl_inspect(@cwl, 'commandline', nil, { :args => { 'input' => 'Hello!' }}))
+                 cwl_inspect(@cwl, 'commandline', nil,
+                             { :args => { 'input' => 'Hello!' }, :runtime => {} }))
   end
 
   def test_root_keys

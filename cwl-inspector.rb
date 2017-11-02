@@ -120,12 +120,10 @@ def to_cmd(cwl, settings)
     }.flatten(1),
     *if cwl_fetch(cwl, '.stdout', nil) or
       not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
-      fname = cwl_fetch(cwl, '.stdout', nil)
-      if fname
-        ['>', instantiate_context(cwl, fname, settings)]
-      else
-        ['>', '$randomized_filename']
-      end
+      fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
+      fname = instantiate_context(cwl, fname, settings)
+      dir = settings[:runtime].fetch('outdir', nil)
+      ['>', dir.nil? ? fname : File.join(dir, fname)]
     else
       []
     end
@@ -312,13 +310,11 @@ def ls_outputs_for_cmd(cwl, id, settings)
   unless cwl_fetch(cwl, id, false)
     raise "Invalid pos #{id}"
   end
+  dir = settings[:runtime].fetch('outdir', nil)
   if cwl_fetch(cwl, "#{id}.type", '') == 'stdout'
-    fname = cwl_fetch(cwl, ".stdout", nil)
-    if fname
-      instantiate_context(cwl, fname, settings)
-    else
-      '$randomized_filename'
-    end
+    fname = cwl_fetch(cwl, ".stdout", '$randomized_filename')
+    fname = instantiate_context(cwl, fname, settings)
+    dir.nil? ? fname : File.join(dir, fname)
   else
     oBinding = cwl_fetch(cwl, "#{id}.outputBinding", nil)
     if oBinding.nil?
@@ -327,7 +323,7 @@ def ls_outputs_for_cmd(cwl, id, settings)
     if oBinding.include? 'glob'
       pat = instantiate_context(cwl, oBinding['glob'], settings)
       if pat.include? '*' or pat.include? '?' or pat.include? '['
-        Dir.glob(settings[:runtime].fetch('outdir', '')+'/'+pat)
+        Dir.glob(dir.nil? ? pat : File.join(dir, pat))
       else
         pat
       end
