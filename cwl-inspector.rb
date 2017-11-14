@@ -434,7 +434,7 @@ if $0 == __FILE__
   args = if not(input.nil?) and not(args.empty?)
            raise "Error: -i yml and -- --param1 p1 are exclusive"
          elsif not input.nil?
-           YAML.load_file(inputs)
+           YAML.load_file(input)
          elsif not args.empty?
            to_arg_map(args.map{ |a| a.split('=') }.flatten)
          else
