@@ -210,14 +210,14 @@ def to_input_param_args(cwl, id, body, settings)
             id.nil? ? nil : settings[:args].fetch(id, "$#{id}")
           end
 
-  value = if value.instance_of? Hash
-            case value.fetch('class', '')
+  if value.instance_of? Hash
+    value = case value.fetch('class', '')
             when 'File'
               value['path']
             else
               value
             end
-          end
+  end
 
   if value.instance_of? Array
     # TODO: Check the behavior if itemSeparator is missing
