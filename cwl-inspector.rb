@@ -224,12 +224,17 @@ def to_input_param_args(cwl, id, body, settings)
     value = value.join(body.fetch('itemSeparator', ' '))
   end
 
-  pre = body.fetch('prefix', nil)
+  pre = (body.fetch('prefix', nil) or body.fetch('inputBinding', {}).fetch('prefix', nil))
+
   argstrs = if pre
               if body.fetch('separate', false)
                 [pre, value].join('')
               else
-                [pre, value]
+                if body.fetch('type', '').start_with? 'boolean'
+                  value ? [pre] : []
+                else
+                  [pre, value]
+                end
               end
             else
               [value]
