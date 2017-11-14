@@ -54,7 +54,7 @@ def inspect_pos(cwl, pos)
         cwl_[po]
       end
     else
-      if po.match(/\d+/)
+      if po.match(/^\d+$/)
         po = po.to_i
         if cwl_.instance_of? Array
           raise "No such field #{pos}" unless po < cwl_.length
