@@ -235,7 +235,11 @@ def to_input_param_args(cwl, id, body, settings)
               [value]
             end
   if value == "$#{id}" and body.fetch('type', '').end_with?('?')
-    ['[', *argstrs, ']']
+    if settings[:args].empty?
+      ['[', *argstrs, ']']
+    else
+      []
+    end
   else
     argstrs
   end
