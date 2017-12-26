@@ -29,12 +29,12 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_commandline
-    assert_equal('docker run -i --rm docker/whalesay cowsay [ $input ] > output',
+    assert_equal('docker run -i --rm docker/whalesay cowsay [ \'$input\' ] > output',
                  cwl_inspect(@cwl, 'commandline'))
   end
 
   def test_instantiated_commandline
-    assert_equal('docker run -i --rm docker/whalesay cowsay Hello! > output',
+    assert_equal('docker run -i --rm docker/whalesay cowsay \'Hello!\' > output',
                  cwl_inspect(@cwl, 'commandline', nil,
                              { :args => { 'input' => 'Hello!' }, :runtime => {} }))
   end

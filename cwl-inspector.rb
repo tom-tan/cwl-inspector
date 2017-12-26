@@ -75,6 +75,53 @@ def inspect_pos(cwl, pos)
   }
 end
 
+def process(cwl, settings)
+  inputs_args = cwl_fetch(cwl, '.inputs', []).with_index.map{ |i, e|
+    id = nil ###
+    val = settings[:args].fetch(id, e.fetch('default', nil))
+    obj = e.fetch('inputBinding', nil)
+    arg, idx = eval_input_object(obj, val)
+    [[idx, i], arg]
+  }
+  args_args = cwl_f.tch(cwl, '.arguments', []).with_index.map{ |i, obj|
+    arg, idx = eval_input_object(obj)
+    [[idx, i], arg]
+  }
+  [*inputs_args, *args_args].sort_by{|a, b| a }.map{ |i, arg| arg }
+end
+
+def eval_input_object(obj, value=nil)
+  return [] if obj.nil?
+
+  # class: File && docker.enable? => -v $PWD/path/to/file:/tmp/file:ro が必要！
+  # 名前が被ったら？ => 同じパスなら何もしない、異なるパスならエラー？
+  # /tmp/orig/path/to/file にしてしまえば問題ないのでは？
+  # Linux のパス長制限を信じろ！
+  value = if obj.include? 'valueFrom'
+            exp = obj['valueFrom'].match(/^\s*(.+)\s*$/m)[1].chomp
+            ### add treatment for loadContent
+            instantiate_context(cwl, exp, settings)
+          else
+            value #
+          end
+
+  if value.instance_of? Hash
+    value = case value.fetch('class', '')
+            when 'File'
+              value['path']
+            else
+              value
+            end
+  end
+
+  if value.instance_of? Array
+    # TODO: Check the behavior if itemSeparator is missing
+    value = value.join(body.fetch('itemSeparator', ' '))
+  end
+
+  [*arg, obj.fetch('position', 0)]
+end
+
 # TODO: more clean implementation
 def cwl_fetch(cwl, pos, default)
   begin
@@ -96,6 +143,8 @@ def docker_cmd(cwl)
           nil
         end
   if img
+    # -v $PWD/targetfile:/tmp/targetfile:ro # for each input file
+    # -v $PWD/outdir:/tmp/outdir:rw # for outputdir if output is not stdout/stderr
     ['docker', 'run', '-i', '--rm', img]
   else
     []
@@ -221,7 +270,12 @@ def to_input_param_args(cwl, id, body, settings)
 
   if value.instance_of? Array
     # TODO: Check the behavior if itemSeparator is missing
+    value = value.map{|v| "'#{v}'" } if body.fetch('shellQuote', true) and value.first.instance_of? String
     value = value.join(body.fetch('itemSeparator', ' '))
+  else
+    value = "'#{value}'" if (not body.fetch('type', '').start_with?('boolean') and
+                             body.fetch('shellQuote', true) and
+                             value.instance_of? String)
   end
 
   pre = (body.fetch('prefix', nil) or body.fetch('inputBinding', {}).fetch('prefix', nil))
@@ -239,7 +293,7 @@ def to_input_param_args(cwl, id, body, settings)
             else
               [value]
             end
-  if value == "$#{id}" and body.fetch('type', '').end_with?('?')
+  if value == "'$#{id}'" and body.fetch('type', '').end_with?('?')
     if settings[:args].empty?
       ['[', *argstrs, ']']
     else
@@ -419,6 +473,39 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
   end
 end
 
+def trans_args(args, cwl, ret = {})
+  return ret if args.empty?
+
+  arg = args.shift
+  raise "Error" unless arg.start_with? '--'
+  neg, arg = arg.match(/^--(no-)?(.+)$/).values_at(1, 2)
+  type = cwl_fetch(cwl, ".inputs.#{arg}.type", nil)
+  raise "No such argment: #{arg}" if type.nil?
+
+  base, suffix = type.match(/^(.+)(\[\])?(\?)?$/).values_at(0, 1)
+  val = case base
+        when 'boolean'
+          neg.nil? ? true : false
+        when 'File', 'Directory'
+          raise "--no prefix is only valid for boolean types" unless neg.nil?
+          {
+            'class' => base,
+            'path' => args.shift,
+          }
+        else
+          raise "--no prefix is only valid for boolean types" unless neg.nil?
+          args.shift
+        end
+
+  if suffix == '[]'
+    ret.fetch(arg, []).push(val)
+  else
+    ret[arg] = val
+  end
+
+  trans_args(args, cwl, ret)
+end
+
 if $0 == __FILE__
   fmt = ->(a) { a }
   runtime = Hash.new(nil)
@@ -454,7 +541,7 @@ if $0 == __FILE__
          elsif not input.nil?
            YAML.load_file(input)
          elsif not args.empty?
-           to_arg_map(args.map{ |a| a.split('=') }.flatten)
+           args.map{ |a| a.split(/=/) }.flatten
          else
            Hash.new(nil)
          end
@@ -467,7 +554,7 @@ if $0 == __FILE__
 
   settings = {
     :runtime => runtime,
-    :args => args,
+    :args => (args.instance_of?(Array) ? trans_args(args, cwl) : args),
   }
   puts fmt.call cwl_inspect(cwl, pos, File.dirname(cwlfile), settings)
 end
