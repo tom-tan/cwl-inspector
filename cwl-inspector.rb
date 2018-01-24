@@ -93,10 +93,6 @@ end
 def eval_input_object(obj, value=nil)
   return [] if obj.nil?
 
-  # class: File && docker.enable? => -v $PWD/path/to/file:/tmp/file:ro が必要！
-  # 名前が被ったら？ => 同じパスなら何もしない、異なるパスならエラー？
-  # /tmp/orig/path/to/file にしてしまえば問題ないのでは？
-  # Linux のパス長制限を信じろ！
   value = if obj.include? 'valueFrom'
             exp = obj['valueFrom'].match(/^\s*(.+)\s*$/m)[1].chomp
             ### add treatment for loadContent
@@ -131,7 +127,7 @@ def cwl_fetch(cwl, pos, default)
   end
 end
 
-def docker_cmd(cwl)
+def docker_cmd(cwl, settings)
   img = if cwl_fetch(cwl, '.requirements', []).find_index{ |e| e['class'] == 'DockerRequirement' }
           idx = cwl_fetch(cwl, '.requirements', []).find_index{ |e|
             e['class'] == 'DockerRequirement'
@@ -143,20 +139,39 @@ def docker_cmd(cwl)
           nil
         end
   if img
-    # -v $PWD/targetfile:/tmp/targetfile:ro # for each input file
-    # -v $PWD/outdir:/tmp/outdir:rw # for outputdir if output is not stdout/stderr
-    ['docker', 'run', '-i', '--rm', img]
+    docker_cmd = ['docker', 'run', '-i', '--rm', '--workdir=/private/var/spool/cwl', '--env=TMPDIR=/tmp', '--env=HOME=/private/var/spool/cwl']
+    volume_map = {}
+    cwl_fetch(cwl, '.inputs', []).dup.keep_if{ |k, v|
+      v.instance_of?(Hash) and (v['type'].start_with?('File') or v['type'].start_with?('Directory'))
+    }.keep_if{ |k, v|
+      settings[:args].include? k
+    }.each{ |k, v|
+      docker_path = "/private/var/lib/cwl/inputs/#{File.basename(settings[:args][k]['path'])}"
+      docker_cmd.push("-v #{settings[:args][k]['path']}:#{docker_path}:ro")
+      volume_map[k] = docker_path
+    }
+
+    cwl_fetch(cwl, '.outputs', []).dup.keep_if{ |k, v|
+      v['type'].start_with?('File') or v['type'].start_with?('Directory')
+    }.each{ |k, v|
+      docker_path = "/private/var/lib/cwl/outputs"
+      docker_cmd.push("-v #{settings[:runtime]['outdir']}:#{docker_path}:rw")
+      volume_map[k] = docker_path
+    }
+    docker_cmd.push(img)
+    [docker_cmd, volume_map]
   else
-    []
+    [[], {}]
   end
 end
 
 def to_cmd(cwl, settings)
+  docker_cmd, vol_map = docker_cmd(cwl, settings)
   [
-    *docker_cmd(cwl),
+    *docker_cmd,
     *cwl_fetch(cwl, '.baseCommand', []),
     *cwl_fetch(cwl, '.arguments', []).map{ |body|
-      to_input_param_args(cwl, nil, body, settings)
+      to_input_param_args(cwl, nil, body, settings, vol_map)
     }.flatten(1),
     *cwl_fetch(cwl, '.inputs', []).find_all{ |id, body|
       body.include? 'inputBinding'
@@ -165,14 +180,13 @@ def to_cmd(cwl, settings)
     }.map{ |id_body, idx|
       id_body
     }.map { |id, body|
-      to_input_param_args(cwl, id, body, settings)
+      to_input_param_args(cwl, id, body, settings, vol_map)
     }.flatten(1),
     *if cwl_fetch(cwl, '.stdout', nil) or
       not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
       fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
       fname = instantiate_context(cwl, fname, settings)
-      dir = settings[:runtime].fetch('outdir', nil)
-      ['>', dir.nil? ? fname : File.join(dir, fname)]
+      ['>', File.join(settings[:runtime]['outdir'], fname)]
     else
       []
     end
@@ -249,7 +263,7 @@ EOS
   end
 end
 
-def to_input_param_args(cwl, id, body, settings)
+def to_input_param_args(cwl, id, body, settings, volume_map)
   return instantiate_context(cwl, body, settings) if body.instance_of? String
 
   value = if body.include? 'valueFrom'
@@ -261,8 +275,8 @@ def to_input_param_args(cwl, id, body, settings)
 
   if value.instance_of? Hash
     value = case value.fetch('class', '')
-            when 'File'
-              value['path']
+            when 'File', 'Directory'
+              volume_map.fetch(id, value['path'])
             else
               value
             end
@@ -382,7 +396,7 @@ def ls_outputs_for_cmd(cwl, id, settings)
   unless cwl_fetch(cwl, id, false)
     raise "Invalid pos #{id}"
   end
-  dir = settings[:runtime].fetch('outdir', nil)
+  dir = settings[:runtime]['outdir']
   if cwl_fetch(cwl, "#{id}.type", '') == 'stdout'
     fname = cwl_fetch(cwl, ".stdout", '$randomized_filename')
     fname = instantiate_context(cwl, fname, settings)
@@ -509,6 +523,8 @@ end
 if $0 == __FILE__
   fmt = ->(a) { a }
   runtime = Hash.new(nil)
+  runtime['outdir'] = File.absolute_path(Dir.pwd)
+
   input = nil
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} cwl pos"
@@ -519,10 +535,10 @@ if $0 == __FILE__
     $nodejs = nodejs
   }
   opt.on('--runtime.outdir=DIR', 'directory for outputs') { |dir|
-    runtime['outdir'] = dir
+    runtime['outdir'] = File.absolute_path(dir)
   }
   opt.on('--runtime.tmpdir=DIR', 'directory for temporary files') { |dir|
-    runtime['tmpdir'] = dir
+    runtime['tmpdir'] = File.absolute_path(dir)
   }
   opt.on('-i YML', 'input parameters') { |yml|
     input = yml

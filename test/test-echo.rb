@@ -29,14 +29,15 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_commandline
-    assert_equal('docker run -i --rm docker/whalesay cowsay [ \'$input\' ] > output',
-                 cwl_inspect(@cwl, 'commandline'))
+    assert_equal("docker run -i --rm --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl docker/whalesay cowsay [ '$input' ] > #{Dir.pwd}/output",
+                 cwl_inspect(@cwl, 'commandline', nil,
+                             { :args => {}, :runtime => { 'outdir' => File.absolute_path('.') }}))
   end
 
   def test_instantiated_commandline
-    assert_equal('docker run -i --rm docker/whalesay cowsay \'Hello!\' > output',
+    assert_equal("docker run -i --rm --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl docker/whalesay cowsay \'Hello!\' > #{Dir.pwd}/output",
                  cwl_inspect(@cwl, 'commandline', nil,
-                             { :args => { 'input' => 'Hello!' }, :runtime => {} }))
+                             { :args => { 'input' => 'Hello!' }, :runtime => { 'outdir' => File.absolute_path('.') } }))
   end
 
   def test_root_keys

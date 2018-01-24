@@ -16,10 +16,10 @@ class TestWorkflow < Test::Unit::TestCase
 
   def test_arguments
     cwl = YAML.load_file(File.join(@cwldir, 'arguments.cwl'))
-    assert_equal('docker run -i --rm java:7-jdk javac -d tmp \'Foo.java\'',
+    assert_equal("docker run -i --rm --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl -v Foo.java:/private/var/lib/cwl/inputs/Foo.java:ro -v #{Dir.pwd}/tmp:/private/var/lib/cwl/outputs:rw java:7-jdk javac -d #{Dir.pwd}/tmp '/private/var/lib/cwl/inputs/Foo.java'",
                  cwl_inspect(cwl, 'commandline', @cwldir,
-                             { :runtime => { 'outdir' => 'tmp' },
-                               :args => { 'src' => 'Foo.java' }}))
+                             { :runtime => { 'outdir' => File.absolute_path('tmp') },
+                               :args => { 'src' => { 'class' => 'File', 'path' => 'Foo.java'} }}))
   end
 
   def test_steps
@@ -35,6 +35,6 @@ class TestWorkflow < Test::Unit::TestCase
   def test_step_instantiated_commandline
     assert_equal('tar xf \'foo.tar\' \'bar.java\'',
                  cwl_inspect(@cwl, 'commandline(.steps.untar)', @cwldir,
-                             { :runtime => {}, :args => { 'inp' => 'foo.tar', 'ex' => 'bar.java' }}))
+                             { :runtime => {}, :args => { 'inp' => { 'class' => 'File', 'path' => 'foo.tar' }, 'ex' => 'bar.java' }}))
   end
 end
