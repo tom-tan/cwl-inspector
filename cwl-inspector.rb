@@ -534,10 +534,10 @@ if $0 == __FILE__
   opt.on('--nodejs-bin=NODE', 'path to nodejs for InlineJavascriptRequirement') { |nodejs|
     $nodejs = nodejs
   }
-  opt.on('--runtime.outdir=DIR', 'directory for outputs') { |dir|
+  opt.on('--outdir=DIR', 'directory for outputs') { |dir|
     runtime['outdir'] = File.absolute_path(dir)
   }
-  opt.on('--runtime.tmpdir=DIR', 'directory for temporary files') { |dir|
+  opt.on('--tmpdir=DIR', 'directory for temporary files') { |dir|
     runtime['tmpdir'] = File.absolute_path(dir)
   }
   opt.on('-i YML', 'input parameters') { |yml|
