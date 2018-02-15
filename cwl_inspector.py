@@ -78,14 +78,17 @@ def inspect_position(cwl, pos):
 
 
 def to_command(cwl, env):
+    """Not implemented."""
     pass
 
 
 def to_step_command(cwl, obj, env):
+    """Not implemented."""
     pass
 
 
 def instantiate_context(cwl, name, env):
+    """Not implemented."""
     return name
 
 
