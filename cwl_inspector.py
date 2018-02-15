@@ -166,7 +166,7 @@ def cwl_inspector(args):
         ap.print_help()
         return 0
 
-    fname = args.doc
+    fname = '/dev/stdin' if args.doc == '-' else args.doc
     if not os.path.exists(fname):
         raise Exception("File not found: "+args.doc)
     cwl = load_document(fname)
