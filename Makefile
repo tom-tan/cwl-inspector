@@ -9,7 +9,7 @@ test:
 	python -Wi -m unittest discover tests
 
 build:
-	docker build -t cwl-inspector:latest .
+	docker build -t cwl-inspector .
 
 deploy: build
 	docker login -u $(DOCKER_USER) -p $(DOCKER_PASS)
