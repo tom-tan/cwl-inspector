@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """This module is an entrypoint for cwl_inspector."""
-from cwl_parser import load_document, save
-import sys
 import argparse
+import glob
+import json
 import os
 import os.path
 import re
+import sys
 import yaml
-import json
+
+from cwl_parser import load_document, save
 
 
 def argparser():
@@ -24,6 +26,19 @@ def argparser():
     parser.add_argument('doc', type=str, help='CWL document for inspction')
     parser.add_argument('pos', type=str, help='Position to be inspection')
     return parser
+
+
+def inspect_get(cwl, pos, default=None):
+    """
+    Almost same as inspect_position.
+
+    It returns a default value if cwl does not have
+    a field pos.
+    """
+    try:
+        return inspect_position(cwl, pos)
+    except Exception as e:
+        return default
 
 
 def inspect_position(cwl, pos):
@@ -45,6 +60,9 @@ def inspect_position(cwl, pos):
                 raise Exception(f'No such field {pos}')
             cur_obj = field
         else:
+            if po == 'class':
+                po = 'class_'
+
             if po not in cur_obj.__dict__:
                 raise Exception(f'No such field {pos}')
 
@@ -67,17 +85,44 @@ def to_step_command(cwl, obj, env):
     pass
 
 
-def ls_outputs_for_command(cwl, obj, env):
-    pass
+def instantiate_context(cwl, name, env):
+    return name
 
 
-def inspect(cwl, pos, env):
+def ls_outputs_for_command(cwl, pos, env):
+    """List the output object for given pos."""
+    if not inspect_get(cwl, pos):
+        raise Exception(f'Invalid pos {pos}')
+
+    directory = env['runtime']['outdir']
+    if inspect_get(cwl, f'{pos}.type', '') == 'stdout':
+        fname = inspect_get(cwl, '.stdout', '$randomized_filename')
+        fname = instantiate_context(cwl, fname, env)
+        return fname if directory is None else os.path.join(directory, fname)
+    else:
+        oBinding = inspect_get(cwl, f'{pos}.outputBinding', None)
+        if oBinding is None:
+            raise 'Not yet supported for outputs without outputBinding'
+        if 'glob' in oBinding.__dict__:
+            pat = instantiate_context(cwl, oBinding.glob, env)
+            if glob.escape(pat) == pat:
+                return glob.glob(pat if directory is None
+                                 else os.path.join(directory, pat))
+            else:
+                return pat
+
+
+def inspect(cwl, pos, env={}):
     """Return an object as a result of inspection."""
     if pos.startswith('.'):
         return inspect_position(cwl, pos)
     elif pos.startswith('keys('):
-        obj = re.match('^keys\((.+)\)$', pos).group(1)
-        return list(inspect_position(cwl, obj).__dict__.keys())
+        pos = re.match('^keys\((.+)\)$', pos).group(1)
+        obj = inspect_position(cwl, pos)
+        if isinstance(obj, list):
+            return sorted([f.id for f in obj if 'id' in f.__dict__])
+        else:
+            return list(sorted(obj.__dict__.keys()))
     elif pos == 'commandline':
         if cwl.class_ != 'CommandLineTool':
             raise Exception('commandline for Workflow needs an argument')
@@ -135,14 +180,14 @@ def cwl_inspector(args):
         },
         'args': {},
     }
-    ret = inspect(cwl, args.pos, env)
+    ret = save(inspect(cwl, args.pos, env))
 
     if args.yaml:
-        print(yaml.dump(save(ret)))
+        print(yaml.dump(ret))
     elif args.json:
-        print(json.dumps(save(ret), indent=4))
+        print(json.dumps(ret, indent=4))
     else:
-        print(save(ret))
+        print(ret)
 
 
 if __name__ == '__main__':
