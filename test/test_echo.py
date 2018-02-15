@@ -40,7 +40,3 @@ class TestEcho(unittest.TestCase):
     def test_keys(self):
         self.assertEqual(['input'],
                          basename(inspect(self.cwl, 'keys(.inputs)')))
-
-
-# if __name__ == '__main__':
-#     unittest.main()
