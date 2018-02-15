@@ -13,7 +13,7 @@ services:
 install:
   - pip install flake8 pydocstyle schema_salad
   - git clone https://github.com/common-workflow-language/common-workflow-language.git
-  - schema-salad-tool --codegen python common-workflow-lanugage/v1.0/CommonWorkflowLanguage.yml > cwl_parser.py
+  - schema-salad-tool --codegen python common-workflow-language/v1.0/CommonWorkflowLanguage.yml > cwl_parser.py
 
 script:
   - make lint
