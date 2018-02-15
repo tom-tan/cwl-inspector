@@ -3,15 +3,18 @@ sudo: required
 notifications:
   email: false
 
-language: ruby
-rvm:
-  - 2.4.2
+language: python
+python:
+  - 3.6
 
 services:
   - docker
 
+install:
+  - pip install flake8 pydocstyle
+
 script:
-  - ./test/run_test.rb
+  - make lint
 
 after_success:
   - ./deploy.sh
