@@ -39,4 +39,5 @@ class TestEcho(unittest.TestCase):
 
     def test_keys(self):
         self.assertEqual(['input'],
-                         basename(inspect(self.cwl, 'keys(.inputs)')))
+                         [basename(f) for f in inspect(self.cwl,
+                                                       'keys(.inputs)')])
