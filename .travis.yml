@@ -22,4 +22,4 @@ script:
   - make test
 
 after_success:
-  - ./deploy.sh
+  - '[ "$TRAVIS_BRANCH" = "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ] && make deploy'
