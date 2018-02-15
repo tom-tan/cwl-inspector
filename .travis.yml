@@ -19,7 +19,7 @@ install:
 script:
   - make lint
   # -Wi is to prevent warnings in the external libraries
-  - python -Wi -m unittest test.test_echo
+  - python -Wi -m unittest discover test
 
 after_success:
   - ./deploy.sh
