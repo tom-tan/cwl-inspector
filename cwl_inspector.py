@@ -29,7 +29,14 @@ def argparser():
 
 
 def trim_id(identifier, only_base=True):
-    """Return a trimed ID."""
+    """
+    Return a trimed ID.
+
+    If only_base is True, it returns an ID that only contains its basename.
+    For instance: trim_id('file://foo/bar#buzz/hoge', True) -> 'hoge'
+    Otherwise it returns an ID with whole fragment.
+    For instance: trim_id('file://foo/bar#buzz/hoge', False) -> 'buzz/hoge'
+    """
     ret = re.sub('^.+#', '', identifier)
     if only_base:
         ret = re.sub('^.+/', '', ret)
