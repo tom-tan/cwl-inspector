@@ -30,7 +30,7 @@ class TestEcho(unittest.TestCase):
         pass
 
     def test_root_keys(self):
-        self.assertEqual(['arguments', 'baseCommand', 'class_', 'cwlVersion',
+        self.assertEqual(['arguments', 'baseCommand', 'class', 'cwlVersion',
                           'doc', 'hints', 'id', 'inputs', 'label', 'outputs',
                           'permanentFailCodes', 'requirements', 'stderr',
                           'stdin', 'stdout', 'successCodes',
