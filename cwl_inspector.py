@@ -138,9 +138,11 @@ def inspect(cwl, pos, env={}):
         pos = re.match('^keys\((.+)\)$', pos).group(1)
         obj = inspect_position(cwl, pos)
         if isinstance(obj, list):
-            return sorted([f.id for f in obj if 'id' in f.__dict__])
+            return sorted([re.sub('^class_$', 'class', f.id)
+                           for f in obj if 'id' in f.__dict__])
         else:
-            return list(sorted(obj.__dict__.keys()))
+            return sorted([re.sub('^class_$', 'class', f)
+                           for f in obj.__dict__.keys()])
     elif pos == 'commandline':
         if cwl.class_ != 'CommandLineTool':
             raise Exception('commandline for Workflow needs an argument')
