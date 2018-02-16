@@ -28,6 +28,14 @@ def argparser():
     return parser
 
 
+def trim_id(identifier, only_base=True):
+    """Return a trimed ID."""
+    ret = re.sub('^.+#', '', identifier)
+    if only_base:
+        ret = re.sub('^.+/', '', ret)
+    return ret
+
+
 def inspect_get(cwl, pos, default=None):
     """
     Almost same as inspect_position.
@@ -54,7 +62,7 @@ def inspect_position(cwl, pos):
                 raise Exception(f'No such field {pos}')
             cur_obj = cur_obj[po]
         elif isinstance(cur_obj, list):
-            field = next((f for f in cur_obj if os.path.basename(f.id) == po),
+            field = next((f for f in cur_obj if trim_id(f.id) == po),
                          None)
             if field is None:
                 raise Exception(f'No such field {pos}')
@@ -93,7 +101,7 @@ def instantiate_context(cwl, name, env):
 
 
 def ls_outputs_for_command(cwl, pos, env):
-    """List the output object for given pos."""
+    """List output objects for given pos."""
     if not inspect_get(cwl, pos):
         raise Exception(f'Invalid pos {pos}')
 
