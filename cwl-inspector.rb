@@ -397,10 +397,14 @@ def ls_outputs_for_cmd(cwl, id, settings)
     raise "Invalid pos #{id}"
   end
   dir = settings[:runtime]['outdir']
-  if cwl_fetch(cwl, "#{id}.type", '') == 'stdout'
+  type = cwl_fetch(cwl, "#{id}.type", '')
+  if type == 'stdout'
     fname = cwl_fetch(cwl, ".stdout", '$randomized_filename')
     fname = instantiate_context(cwl, fname, settings)
-    dir.nil? ? fname : File.join(dir, fname)
+    {
+      'class' => 'File',
+      'path' => dir.nil? ? fname : File.join(dir, fname),
+    }
   else
     oBinding = cwl_fetch(cwl, "#{id}.outputBinding", nil)
     if oBinding.nil?
@@ -409,9 +413,26 @@ def ls_outputs_for_cmd(cwl, id, settings)
     if oBinding.include? 'glob'
       pat = instantiate_context(cwl, oBinding['glob'], settings)
       if pat.include? '*' or pat.include? '?' or pat.include? '['
-        Dir.glob(dir.nil? ? pat : File.join(dir, pat))
+        ret = Dir.glob(dir.nil? ? pat : File.join(dir, pat))
+        if type == 'File'
+          {
+            'class' => 'File',
+            'path' => ret.first,
+          }
+        elsif type == 'File[]' or
+              { 'type' => 'array', 'items' => 'File' }
+          ret.map{ |it|
+            {
+              'class' => 'File',
+              'path' => it,
+            }
+          }
+        end
       else
-        pat
+        {
+          'class' => 'File',
+          'path' => pat,
+        }
       end
     end
   end
@@ -472,7 +493,20 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
       raise "Not yet implemented it for Workflow"
       ls_outputs_for_workflow(cwl, $1, dir, settings)
     when 'CommandLineTool'
-      ls_outputs_for_cmd(cwl, $1, settings)
+      ret = ls_outputs_for_cmd(cwl, $1, settings)
+      if settings[:runtime].fetch('output-in-cwltype', false)
+        ret
+      else
+        if ret.instance_of? Array
+          ret.map{ |it|
+            # assumes it['class'] == 'File'
+            it['path']
+          }
+        else
+          # assumes ret['class'] == 'File'
+          ret['path']
+        end
+      end
     else
       raise "Unsupported class #{inspect_pos(cwl, '.class')}"
     end
@@ -542,6 +576,9 @@ if $0 == __FILE__
   }
   opt.on('-i YML', 'input parameters') { |yml|
     input = yml
+  }
+  opt.on('--cwl-type', 'Print output object as a CWL object') {
+    runtime['output-in-cwltype'] = true
   }
   opt.parse!(ARGV)
 
