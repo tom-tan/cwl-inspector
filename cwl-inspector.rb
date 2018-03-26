@@ -403,7 +403,7 @@ def ls_outputs_for_cmd(cwl, id, settings)
     fname = instantiate_context(cwl, fname, settings)
     {
       'class' => 'File',
-      'path' => dir.nil? ? fname : File.join(dir, fname),
+      'path' => File.absolute_path(dir.nil? ? fname : File.join(dir, fname)),
     }
   else
     oBinding = cwl_fetch(cwl, "#{id}.outputBinding", nil)
@@ -417,21 +417,21 @@ def ls_outputs_for_cmd(cwl, id, settings)
         if type == 'File'
           {
             'class' => 'File',
-            'path' => ret.first,
+            'path' => File.absolute_path(ret.first),
           }
         elsif type == 'File[]' or
               { 'type' => 'array', 'items' => 'File' }
           ret.map{ |it|
             {
               'class' => 'File',
-              'path' => it,
+              'path' => File.absolute_path(it),
             }
           }
         end
       else
         {
           'class' => 'File',
-          'path' => pat,
+          'path' => File.absolute_path(pat),
         }
       end
     end
@@ -494,7 +494,7 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
       ls_outputs_for_workflow(cwl, $1, dir, settings)
     when 'CommandLineTool'
       ret = ls_outputs_for_cmd(cwl, $1, settings)
-      if settings[:runtime].fetch('output-in-cwltype', false)
+      if settings[:runtime]['output-in-cwltype']
         ret
       else
         if ret.instance_of? Array
@@ -558,6 +558,7 @@ if $0 == __FILE__
   fmt = ->(a) { a }
   runtime = Hash.new(nil)
   runtime['outdir'] = File.absolute_path(Dir.pwd)
+  runtime['output-in-cwltype'] = false
 
   input = nil
   opt = OptionParser.new
