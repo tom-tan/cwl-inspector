@@ -287,9 +287,12 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
     value = value.map{|v| "'#{v}'" } if body.fetch('shellQuote', true) and value.first.instance_of? String
     value = value.join(body.fetch('itemSeparator', ' '))
   else
-    value = "'#{value}'" if (not body.fetch('type', '').start_with?('boolean') and
-                             body.fetch('shellQuote', true) and
-                             value.instance_of? String)
+    type = body.fetch('type', '')
+    if type.instance_of? String
+      value = "'#{value}'" if (not type.start_with?('boolean') and
+                               body.fetch('shellQuote', true) and
+                               value.instance_of? String)
+    end
   end
 
   pre = (body.fetch('prefix', nil) or body.fetch('inputBinding', {}).fetch('prefix', nil))
@@ -298,7 +301,8 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
               if body.fetch('separate', false)
                 [pre, value].join('')
               else
-                if body.fetch('type', '').start_with? 'boolean'
+                type = body.fetch('type', '')
+                if type.instance_of? String and body.fetch('type', '').start_with? 'boolean'
                   value ? [pre] : []
                 else
                   [pre, value]
