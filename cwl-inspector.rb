@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 
+require 'etc'
 require 'yaml'
 require 'json'
 require 'optparse'
@@ -601,6 +602,39 @@ def trans_args(args, cwl, ret = {})
   trans_args(args, cwl, ret)
 end
 
+def get_runtime_cores(cwl)
+  reqs = cwl_fetch(cwl, '.requirements.ResourceRequirement', {})
+  hints = cwl_fetch(cwl, '.hints.ResourceRequirement', {})
+  min = reqs.fetch('coresMin', hints.fetch('coresMin', nil))
+  max = reqs.fetch('coresMax', hints.fetch('coresMax', nil))
+
+  raise "Invalid ResourceRequirement" if not min.nil? and not max.nil? and max < min
+  min = max if min.nil?
+  max = min if max.nil?
+  ncores = Etc.nprocessors
+  raise "Invalid ResourceRequirement" if ncores < min
+  [ncores, max].min
+end
+
+def get_runtime_ram(cwl)
+  reqs = cwl_fetch(cwl, '.requirements.ResourceRequirement', {})
+  hints = cwl_fetch(cwl, '.hints.ResourceRequirement', {})
+  min = reqs.fetch('ramMin', hints.fetch('ramMin', nil))
+  max = reqs.fetch('ramMax', hints.fetch('ramMax', nil))
+
+  raise "Invalid ResourceRequirement" if not min.nil? and not max.nil? and max < min
+  min = max if min.nil?
+  max = min if max.nil?
+  ram = 0 ## TODO
+  if min.nil? and max.nil?
+    ram
+  else
+    raise "Invalid ResourceRequirement" if ram < min
+    [ram, max].min
+  end
+  raise "Not implemented"
+end
+
 if $0 == __FILE__
   fmt = ->(a) { a }
   runtime = Hash.new(nil)
@@ -652,6 +686,9 @@ if $0 == __FILE__
         else
           YAML.load_file(cwlfile)
         end
+
+  runtime['cores'] = get_runtime_cores(cwl)
+  # runtime['ram'] = get_runtime_ram(cwl)
 
   settings = {
     :runtime => runtime,
