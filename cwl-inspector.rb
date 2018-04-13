@@ -53,6 +53,12 @@ def inspect_pos(cwl, pos)
       else
         cwl_[po]
       end
+    when 'requirements', 'hints'
+      if cwl_[po].instance_of? Array
+        Hash[cwl_[po].map{ |e| [e['class'], e] }]
+      else
+        cwl_[po]
+      end
     else
       if po.match(/^\d+$/)
         po = po.to_i
@@ -128,11 +134,8 @@ def cwl_fetch(cwl, pos, default)
 end
 
 def docker_cmd(cwl, settings)
-  img = if cwl_fetch(cwl, '.requirements', []).find_index{ |e| e['class'] == 'DockerRequirement' }
-          idx = cwl_fetch(cwl, '.requirements', []).find_index{ |e|
-            e['class'] == 'DockerRequirement'
-          }
-          inspect_pos(cwl, ".requirements.#{idx}.dockerPull")
+  img = if cwl_fetch(cwl, '.requirements.DockerRequirement', nil)
+          cwl_fetch(cwl, ".requirements.DockerRequirement.dockerPull", nil)
         elsif cwl_fetch(cwl, '.hints.DockerRequirement', nil) and system('which docker > /dev/null')
           cwl_fetch(cwl, '.hints.DockerRequirement.dockerPull', nil)
         else
@@ -231,7 +234,7 @@ EOS
 end
 
 def eval_expression(cwl, exp, settings)
-  if cwl_fetch(cwl, '.requirements', []).find_index{ |it| it['class'] == 'InlineJavascriptRequirement' }
+  if cwl_fetch(cwl, '.requirements.InlineJavascriptRequirement', nil)
     ret = exp.start_with?('{') ? "(function() #{exp})()" : exp[1..-2]
     fbody = <<EOS
 function() {
