@@ -59,6 +59,24 @@ def inspect_pos(cwl, pos)
       else
         cwl_[po]
       end
+    when 'type'
+      if cwl_[po].instance_of? Hash
+        obj = cwl_[po]
+        if obj.include? 'type' and obj.include? 'items'
+          "#{obj['type']}[]"
+        else
+          obj
+        end
+      elsif cwl_[po].instance_of? Array
+        obj = cwl_[po]
+        if obj[0] == 'null'
+          "#{obj[1]}?"
+        else
+          obj
+        end
+      else
+        cwl_[po]
+      end
     else
       if po.match(/^\d+$/)
         po = po.to_i
@@ -145,7 +163,7 @@ def docker_cmd(cwl, settings)
     docker_cmd = ['docker', 'run', '-i', '--rm', '--workdir=/private/var/spool/cwl', '--env=TMPDIR=/tmp', '--env=HOME=/private/var/spool/cwl']
     volume_map = {}
     cwl_fetch(cwl, '.inputs', []).dup.keep_if{ |k, v|
-      v.instance_of?(Hash) and (v['type'].start_with?('File') or v['type'].start_with?('Directory'))
+      v.instance_of?(Hash) and (cwl_fetch(v, '.type', '').start_with?('File') or cwl_fetch(v, '.type', '').start_with?('Directory'))
     }.keep_if{ |k, v|
       settings[:args].include? k
     }.each{ |k, v|
@@ -155,7 +173,8 @@ def docker_cmd(cwl, settings)
     }
 
     cwl_fetch(cwl, '.outputs', []).dup.keep_if{ |k, v|
-      v['type'].start_with?('File') or v['type'].start_with?('Directory')
+      type = inspect_pos(v, '.type')
+      type.start_with?('File') or type.start_with?('Directory')
     }.each{ |k, v|
       docker_path = "/private/var/lib/cwl/outputs"
       docker_cmd.push("-v #{settings[:runtime]['outdir']}:#{docker_path}:rw")
@@ -290,11 +309,16 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
     value = value.map{|v| "'#{v}'" } if body.fetch('shellQuote', true) and value.first.instance_of? String
     value = value.join(body.fetch('itemSeparator', ' '))
   else
-    type = body.fetch('type', '')
+    type = cwl_fetch(body, '.type', '')
     if type.instance_of? String
-      value = "'#{value}'" if (not type.start_with?('boolean') and
-                               body.fetch('shellQuote', true) and
-                               value.instance_of? String)
+      if type.start_with?('string') and body.fetch('shellQuote', true)
+        value = "'#{value}'"
+      elsif type.start_with?('File')
+        value = "'#{value}'"
+      end
+    elsif type.instance_of?(NilClass) and value.instance_of?(String) and
+         body.fetch('shellQuote', true)
+      value = "'#{value}'"
     end
   end
 
@@ -314,11 +338,12 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
             else
               [value]
             end
-  if value == "'$#{id}'" and body.fetch('type', '').end_with?('?')
+  if value.instance_of?(String) and value.match(/^'\$#{id}'$/) and
+    cwl_fetch(body, '.type', '').end_with?('?')
     if settings[:args].empty?
       ['[', *argstrs, ']']
     else
-      []
+      argstrs
     end
   else
     argstrs
