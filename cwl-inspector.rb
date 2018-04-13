@@ -294,6 +294,18 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
   value = if body.include? 'valueFrom'
             str = body['valueFrom'].match(/^\s*(.+)\s*$/m)[1].chomp
             instantiate_context(cwl, str, settings)
+          elsif body.include? 'default'
+            default = body.fetch('default')
+            if default.instance_of? Hash
+              case default.fetch('class', '')
+              when 'File', 'Directory'
+                default.fetch('path', default.fetch('location', nil))
+              else
+                default
+              end
+            else
+              default
+            end
           else
             id.nil? ? nil : settings[:args].fetch(id, "$#{id}")
           end
