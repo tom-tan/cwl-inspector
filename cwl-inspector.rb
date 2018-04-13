@@ -167,8 +167,10 @@ def docker_cmd(cwl, settings)
     }.keep_if{ |k, v|
       settings[:args].include? k
     }.each{ |k, v|
-      docker_path = "/private/var/lib/cwl/inputs/#{File.basename(settings[:args][k]['path'])}"
-      docker_cmd.push("-v #{settings[:args][k]['path']}:#{docker_path}:ro")
+      obj = settings[:args][k]
+      path = obj.fetch('path', obj.fetch('location', nil))
+      docker_path = "/private/var/lib/cwl/inputs/#{File.basename(path)}"
+      docker_cmd.push("-v #{path}:#{docker_path}:ro")
       volume_map[k] = docker_path
     }
 
@@ -298,10 +300,23 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
   if value.instance_of? Hash
     value = case value.fetch('class', '')
             when 'File', 'Directory'
-              volume_map.fetch(id, value['path'])
+              volume_map.fetch(id, value.fetch('path', value.fetch('location', nil)))
             else
               value
             end
+  elsif value.instance_of? Array
+    value = value.map{ |v|
+      if v.instance_of? Hash
+        case v.fetch('class', '')
+        when 'File', 'Directory'
+          volume_map.fetch(id, v.fetch('path', v.fetch('location', nil)))
+        else
+          v
+        end
+      else
+        v
+      end
+    }
   end
 
   if value.instance_of? Array
