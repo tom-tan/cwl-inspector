@@ -458,7 +458,19 @@ def ls_outputs_for_cmd(cwl, id, settings)
   end
   dir = settings[:runtime]['outdir']
   type = cwl_fetch(cwl, "#{id}.type", '')
-  if type == 'stdout'
+  if File.exist? File.join(dir, 'cwl.output.json')
+    id_ = id.split('.').last
+    outputs = open(File.join(dir, 'cwl.output.json')) { |f|
+      JSON.load(f)
+    }
+    if outputs.include? id_
+      outputs[id_]
+    elsif type.end_with? '?'
+      nil
+    else
+      raise "#{id_} should exist in cwl.output.json but does not"
+    end
+  elsif type == 'stdout'
     fname = cwl_fetch(cwl, ".stdout", '$randomized_filename')
     fname = instantiate_context(cwl, fname, settings)
     {
@@ -555,16 +567,30 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
     when 'CommandLineTool'
       ret = ls_outputs_for_cmd(cwl, $1, settings)
       if settings[:runtime]['output-in-cwltype']
-        ret
+        ret.nil? ? 'null' : ret
       else
         if ret.instance_of? Array
           ret.map{ |it|
-            # assumes it['class'] == 'File'
-            it['path']
+            if it.instance_of? Hash
+              case it.fetch('class', '')
+              when 'File', 'Directory'
+                it['path']
+              else
+                it
+              end
+            else
+              it
+            end
           }
+        elsif ret.instance_of? Hash
+          case it.fetch('class', '')
+          when 'File', 'Directory'
+            ret['path']
+          else
+            ret
+          end
         else
-          # assumes ret['class'] == 'File'
-          ret['path']
+          ret
         end
       end
     else
