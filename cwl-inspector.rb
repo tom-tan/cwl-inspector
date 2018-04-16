@@ -624,8 +624,12 @@ def get_runtime_cores(cwl)
   min = max if min.nil?
   max = min if max.nil?
   ncores = Etc.nprocessors
-  raise "Invalid ResourceRequirement" if ncores < min
-  [ncores, max].min
+  if min.nil? and max.nil?
+    ncores
+  else
+    raise "Invalid ResourceRequirement" if ncores < min
+    [ncores, max].min
+  end
 end
 
 def get_runtime_ram(cwl)
@@ -644,7 +648,6 @@ def get_runtime_ram(cwl)
     raise "Invalid ResourceRequirement" if ram < min
     [ram, max].min
   end
-  raise "Not implemented"
 end
 
 if $0 == __FILE__
