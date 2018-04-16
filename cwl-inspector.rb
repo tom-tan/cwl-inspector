@@ -637,7 +637,7 @@ def get_runtime_ram(cwl)
   raise "Invalid ResourceRequirement" if not min.nil? and not max.nil? and max < min
   min = max if min.nil?
   max = min if max.nil?
-  ram = 0 ## TODO
+  ram = 1024 # default value in cwltool
   if min.nil? and max.nil?
     ram
   else
