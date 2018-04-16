@@ -729,7 +729,7 @@ if $0 == __FILE__
         end
 
   runtime['cores'] = get_runtime_cores(cwl)
-  # runtime['ram'] = get_runtime_ram(cwl)
+  runtime['ram'] = get_runtime_ram(cwl)
 
   settings = {
     :runtime => runtime,
