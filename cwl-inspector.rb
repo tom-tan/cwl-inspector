@@ -688,6 +688,9 @@ if $0 == __FILE__
   opt.on('--yaml', 'print in YAML format') {
     fmt = ->(a) { YAML.dump(a) }
   }
+  opt.on('--json', 'print in JSON format') {
+    fmt = ->(a) { JSON.dump(a) }
+  }
   opt.on('--nodejs-bin=NODE', 'path to nodejs for InlineJavascriptRequirement') { |nodejs|
     $nodejs = nodejs
   }
