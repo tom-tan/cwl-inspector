@@ -557,6 +557,20 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
       raise 'commandline for CommandLineTool does not need an argument'
     end
     to_step_cmd(cwl, $1, dir, settings)
+  when /^list-outputs$/
+    class_ = inspect_pos(cwl, '.class')
+    case class_
+    when 'Workflow'
+      raise "list-outputs is not supported for workflows"
+    when 'CommandLineTool'
+      Hash[inspect_pos(cwl, '.outputs').keys.map{ |k|
+             [k,
+              ls_outputs_for_cmd(cwl, ".outputs.#{k}", settings)
+             ]
+           }]
+    else
+      raise "Unsupported class: #{class_}"
+    end
   when /^ls\((\.outputs\..+)\)$/
     # TODO: Is .steps.foo enough?
     # How about .steps.foo.out1?
