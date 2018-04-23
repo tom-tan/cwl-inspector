@@ -190,23 +190,31 @@ def docker_cmd(cwl, settings)
   end
 end
 
+def construct_args(cwl, vol_map, settings)
+  arr = cwl_fetch(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
+    i = if body.instance_of? String
+          idx
+        else
+          body.fetch('position', idx)
+        end
+    [i, to_input_param_args(cwl, nil, body, settings, vol_map)]
+  }+cwl_fetch(cwl, '.inputs', []).find_all{ |id, body|
+      body.include? 'inputBinding'
+  }.to_enum.with_index.map { |id_body, idx|
+    [id_body[1]['inputBinding'].fetch('position', 0), id_body[0], id_body[1]]
+  }.map{ |idx, id, body|
+    [idx, to_input_param_args(cwl, id, body, settings, vol_map)]
+  }
+
+  arr.sort_by{ |v| v[0] }.map{ |v| v[1] }.flatten(1)
+end
+
 def to_cmd(cwl, settings)
   docker_cmd, vol_map = docker_cmd(cwl, settings)
   [
     *docker_cmd,
     *cwl_fetch(cwl, '.baseCommand', []),
-    *cwl_fetch(cwl, '.arguments', []).map{ |body|
-      to_input_param_args(cwl, nil, body, settings, vol_map)
-    }.flatten(1),
-    *cwl_fetch(cwl, '.inputs', []).find_all{ |id, body|
-      body.include? 'inputBinding'
-    }.each_with_index.sort_by{ |id_body, idx|
-      [id_body[1]['inputBinding'].fetch('position', 0), idx]
-    }.map{ |id_body, idx|
-      id_body
-    }.map { |id, body|
-      to_input_param_args(cwl, id, body, settings, vol_map)
-    }.flatten(1),
+    *construct_args(cwl, vol_map, settings),
     *if cwl_fetch(cwl, '.stdout', nil) or
       not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
       fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
