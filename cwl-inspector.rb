@@ -29,9 +29,10 @@ require 'json'
 require 'optparse'
 require 'digest/sha1'
 
-def cwl_file_find(file, dir)
-  if File.exist? File.join(dir, file)
-    return File.join(dir, file)
+def cwl_file_find(file, settings)
+  file = File.join(settings[:doc_dir], file)
+  if File.exist? file
+    return file
   end
   # TODO: Search other lookup paths
   nil
@@ -296,6 +297,18 @@ EOS
   end
 end
 
+def extract_path(path, basedir)
+  if path.nil?
+    nil
+  elsif path.match %r|^file://(.+)$|
+    $1
+  elsif path.start_with? '/'
+    path
+  else
+    File.expand_path(path, basedir)
+  end
+end
+
 def to_input_param_args(cwl, id, body, settings, volume_map)
   return instantiate_context(cwl, body, settings) if body.instance_of? String
 
@@ -307,7 +320,8 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
             if default.instance_of? Hash
               case default.fetch('class', '')
               when 'File', 'Directory'
-                default.fetch('path', default.fetch('location', nil))
+                default.fetch('path', extract_path(default.fetch('location', nil),
+                                                   settings[:doc_dir]))
               else
                 default
               end
@@ -321,7 +335,9 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
   if value.instance_of? Hash
     value = case value.fetch('class', '')
             when 'File', 'Directory'
-              volume_map.fetch(id, value.fetch('path', value.fetch('location', nil)))
+              volume_map.fetch(id, value.fetch('path',
+                                               extract_path(value.fetch('location', nil),
+                                                            settings[:doc_dir])))
             else
               value
             end
@@ -330,7 +346,9 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
       if v.instance_of? Hash
         case v.fetch('class', '')
         when 'File', 'Directory'
-          volume_map.fetch(id, v.fetch('path', v.fetch('location', nil)))
+          volume_map.fetch(id, v.fetch('path',
+                                       extract_path(v.fetch('location', nil),
+                                                    settings[:doc_dir])))
         else
           v
         end
@@ -518,13 +536,7 @@ def ls_outputs_for_cmd(cwl, id, settings)
   end
 end
 
-def ls_outputs_for_workflow(cwl, id, dir, settings)
-  if cwl_fetch(cwl, id, false)
-    raise "Invalid pos #{id}"
-  end
-end
-
-def to_step_cmd(cwl, step, dir, settings)
+def to_step_cmd(cwl, step, settings)
   step_ = inspect_pos(cwl, step)
   step_cmd = step_['run']
   step_args = Hash[step_['in'].map{ |k, v|
@@ -537,18 +549,19 @@ def to_step_cmd(cwl, step, dir, settings)
                    }]
   case step_cmd
   when String
-    step_cwl_file = cwl_file_find(step_cmd, dir)
+    step_cwl_file = cwl_file_find(step_cmd, settings)
     raise "File not found: #{step_cmd} defind in step #{step}" if step_cwl_file.nil?
     step_cwl = YAML.load_file(step_cwl_file)
   else
     step_cwl = step_cmd
   end
   # TODO: How to handle workflows and expressions for 'commandline'?
-  cwl_inspect(step_cwl, 'commandline', dir,
-              { :runtime => settings[:runtime], :args => step_args })
+  cwl_inspect(step_cwl, 'commandline',
+              { :runtime => settings[:runtime], :args => step_args,
+                :doc_dir => File.absolute_path(step_cwl_file) })
 end
 
-def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
+def cwl_inspect(cwl, pos, settings = { :runtime => {}, :args => {}, :doc_dir => nil })
   # TODO: validate CWL
   case pos
   when /^\./
@@ -564,7 +577,7 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
     unless inspect_pos(cwl, '.class') == 'Workflow'
       raise 'commandline for CommandLineTool does not need an argument'
     end
-    to_step_cmd(cwl, $1, dir, settings)
+    to_step_cmd(cwl, $1, settings)
   when /^list-outputs$/
     class_ = inspect_pos(cwl, '.class')
     case class_
@@ -585,7 +598,6 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
     case inspect_pos(cwl, '.class')
     when 'Workflow'
       raise "Not yet implemented it for Workflow"
-      ls_outputs_for_workflow(cwl, $1, dir, settings)
     when 'CommandLineTool'
       ret = ls_outputs_for_cmd(cwl, $1, settings)
       if settings[:runtime]['output-in-cwltype']
@@ -623,7 +635,6 @@ def cwl_inspect(cwl, pos, dir = nil, settings = { :runtime => {}, :args => {} })
       raise "ls outputs for steps does not work for CommandLineTool"
     end
     raise "Not yet implemented"
-    ls_outputs_for_workflow(cwl, $1, dir, settings)
   else
     raise "Unknown pos: #{pos}"
   end
@@ -759,6 +770,7 @@ if $0 == __FILE__
   settings = {
     :runtime => runtime,
     :args => (args.instance_of?(Array) ? trans_args(args, cwl) : args),
+    :doc_dir => File.expand_path(File.dirname(cwlfile)),
   }
-  puts fmt.call cwl_inspect(cwl, pos, File.dirname(cwlfile), settings)
+  puts fmt.call cwl_inspect(cwl, pos, settings)
 end
