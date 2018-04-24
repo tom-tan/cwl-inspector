@@ -194,20 +194,37 @@ end
 def construct_args(cwl, vol_map, settings)
   arr = cwl_fetch(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
     i = if body.instance_of? String
-          idx
+          0
         else
-          body.fetch('position', idx)
+          body.fetch('position', 0)
         end
-    [i, to_input_param_args(cwl, nil, body, settings, vol_map)]
+    [[i, idx], to_input_param_args(cwl, nil, body, settings, vol_map)]
   }+cwl_fetch(cwl, '.inputs', []).find_all{ |id, body|
       body.include? 'inputBinding'
   }.to_enum.with_index.map { |id_body, idx|
-    [id_body[1]['inputBinding'].fetch('position', 0), id_body[0], id_body[1]]
+    i = id_body[1]['inputBinding'].fetch('position', 0)
+    [[i, id_body[0]], id_body[0], id_body[1]]
   }.map{ |idx, id, body|
     [idx, to_input_param_args(cwl, id, body, settings, vol_map)]
   }
 
-  arr.sort_by{ |v| v[0] }.map{ |v| v[1] }.flatten(1)
+  arr.sort{ |a, b|
+    a0, b0 = a[0], b[0]
+    if a0[0] == b0[0]
+      a01, b01 = a0[1], b0[1]
+      if a01.class == b01.class
+        a01 <=> b01
+      elsif a01.instance_of? Integer
+        -1
+      else
+        1
+      end
+    else
+      a0[0] <=> b0[0]
+    end
+  }.map{ |v|
+    v[1]
+  }.flatten(1)
 end
 
 def to_cmd(cwl, settings)
