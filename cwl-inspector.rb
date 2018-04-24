@@ -167,9 +167,9 @@ def docker_cmd(cwl, settings)
     cwl_fetch(cwl, '.inputs', []).dup.keep_if{ |k, v|
       v.instance_of?(Hash) and (cwl_fetch(v, '.type', '').start_with?('File') or cwl_fetch(v, '.type', '').start_with?('Directory'))
     }.keep_if{ |k, v|
-      settings[:args].include? k
+      settings[:args].include?(k) or v.include?('default')
     }.each{ |k, v|
-      obj = settings[:args][k]
+      obj = v.fetch('default', settings[:args][k])
       path = obj.fetch('path', obj.fetch('location', nil))
       docker_path = "/private/var/lib/cwl/inputs/#{File.basename(path)}"
       docker_cmd.push("-v #{path}:#{docker_path}:ro")
