@@ -337,8 +337,10 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
             if default.instance_of? Hash
               case default.fetch('class', '')
               when 'File', 'Directory'
-                default.fetch('path', extract_path(default.fetch('location', nil),
-                                                   settings[:doc_dir]))
+                volume_map.fetch(id,
+                                 default.fetch('path',
+                                               extract_path(default.fetch('location', nil),
+                                                            settings[:doc_dir])))
               else
                 default
               end
