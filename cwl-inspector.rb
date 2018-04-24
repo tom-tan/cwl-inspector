@@ -361,7 +361,7 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
   if value.instance_of? Array
     # TODO: Check the behavior if itemSeparator is missing
     value = value.map{|v| "'#{v}'" } if body.fetch('shellQuote', true) and value.first.instance_of? String
-    value = value.join(body.fetch('itemSeparator', ' '))
+    value = value.join(body.fetch('inputBinding', {}).fetch('itemSeparator', ' '))
   else
     type = cwl_fetch(body, '.type', '')
     if type.instance_of? String
