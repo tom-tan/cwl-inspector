@@ -65,7 +65,12 @@ def inspect_pos(cwl, pos)
       if cwl_[po].instance_of? Hash
         obj = cwl_[po]
         if obj.include? 'type' and obj.include? 'items'
-          "#{obj['type']}[]"
+          type = obj['type']
+          if type == 'array'
+            "#{obj['items']}[]"
+          else
+            raise "Unsupported type: #{obj}"
+          end
         else
           obj
         end
@@ -162,28 +167,42 @@ def docker_cmd(cwl, settings)
           nil
         end
   if img
-    docker_cmd = ['docker', 'run', '-i', '--rm', '--workdir=/private/var/spool/cwl', '--env=TMPDIR=/tmp', '--env=HOME=/private/var/spool/cwl']
+    docker_cmd = [
+      'docker', 'run', '-i', '--rm', '--read-only',
+      '--workdir=/private/var/spool/cwl', '--env=TMPDIR=/tmp',
+      '--env=HOME=/private/var/spool/cwl',
+      "--user=#{Process::UID.eid}:#{Process::GID.eid}",
+      "-v #{settings[:runtime]['outdir']}:/private/var/spool/cwl",
+    ]
     volume_map = {}
+
+
     cwl_fetch(cwl, '.inputs', []).dup.keep_if{ |k, v|
       v.instance_of?(Hash) and (cwl_fetch(v, '.type', '').start_with?('File') or cwl_fetch(v, '.type', '').start_with?('Directory'))
     }.keep_if{ |k, v|
       settings[:args].include?(k) or v.include?('default')
     }.each{ |k, v|
       obj = v.fetch('default', settings[:args][k])
-      path = obj.fetch('path', obj.fetch('location', nil))
-      docker_path = "/private/var/lib/cwl/inputs/#{File.basename(path)}"
-      docker_cmd.push("-v #{path}:#{docker_path}:ro")
-      volume_map[k] = docker_path
+      case cwl_fetch(v, '.type', '')
+      when /^File\??$/, /^Directory\??$/
+        path = File.expand_path obj.fetch('path', obj.fetch('location', nil)),
+                                settings[:doc_dir]
+        docker_path = "/private/var/lib/cwl/inputs/#{File.basename(path)}"
+        docker_cmd.push("-v #{path}:#{docker_path}:ro")
+        volume_map[k] = docker_path
+      when /^File\[\]\??$/, /^Directory\[\]\??$/
+        newpaths = obj.map{ |o|
+          path = File.expand_path o.fetch('path', o.fetch('location', nil)),
+                                  settings[:doc_dir]
+          docker_path = "/private/var/lib/cwl/inputs/#{File.basename(path)}"
+          docker_cmd.push("-v #{path}:#{docker_path}:ro")
+          docker_path
+        }
+        volume_map[k] = newpaths
+      end
+
     }
 
-    cwl_fetch(cwl, '.outputs', []).dup.keep_if{ |k, v|
-      type = inspect_pos(v, '.type')
-      type.start_with?('File') or type.start_with?('Directory')
-    }.each{ |k, v|
-      docker_path = "/private/var/lib/cwl/outputs"
-      docker_cmd.push("-v #{settings[:runtime]['outdir']}:#{docker_path}:rw")
-      volume_map[k] = docker_path
-    }
     docker_cmd.push(img)
     [docker_cmd, volume_map]
   else
