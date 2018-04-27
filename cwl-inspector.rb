@@ -248,18 +248,25 @@ end
 
 def to_cmd(cwl, settings)
   docker_cmd, vol_map = docker_cmd(cwl, settings)
+
+  redirect = if cwl_fetch(cwl, '.stdout', nil) or
+               not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
+               fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
+               fname = instantiate_context(cwl, fname, settings)
+               ['>', File.join(settings[:runtime]['outdir'], fname)]
+             elsif cwl_fetch(cwl, '.stderr', nil) or
+                  not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdstderr' }.empty?
+               fname = cwl_fetch(cwl, '.stderr', '$randomized_filename')
+               fname = instantiate_context(cwl, fname, settings)
+               ['2>', File.join(settings[:runtime]['outdir'], fname)]
+             else
+               []
+             end
   [
     *docker_cmd,
     *cwl_fetch(cwl, '.baseCommand', []),
     *construct_args(cwl, vol_map, settings),
-    *if cwl_fetch(cwl, '.stdout', nil) or
-      not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
-      fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
-      fname = instantiate_context(cwl, fname, settings)
-      ['>', File.join(settings[:runtime]['outdir'], fname)]
-    else
-      []
-    end
+    *redirect,
   ].join(' ')
 end
 
