@@ -16,7 +16,7 @@ class TestWorkflow < Test::Unit::TestCase
 
   def test_arguments
     cwl = YAML.load_file(File.join(@cwldir, 'arguments.cwl'))
-    assert_equal("docker run -i --rm --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl -v Foo.java:/private/var/lib/cwl/inputs/Foo.java:ro -v #{Dir.pwd}/tmp:/private/var/lib/cwl/outputs:rw java:7-jdk javac -d #{Dir.pwd}/tmp '/private/var/lib/cwl/inputs/Foo.java'",
+    assert_equal("docker run -i --rm --read-only --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}/tmp:/private/var/spool/cwl -v #{File.expand_path @cwldir}/Foo.java:/private/var/lib/cwl/inputs/Foo.java:ro java:7-jdk javac -d #{Dir.pwd}/tmp '/private/var/lib/cwl/inputs/Foo.java'",
                  cwl_inspect(cwl, 'commandline',
                              {
                                :runtime => { 'outdir' => File.absolute_path('tmp') },

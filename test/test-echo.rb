@@ -29,7 +29,7 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_commandline
-    assert_equal("docker run -i --rm --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl docker/whalesay cowsay [ '$input' ] > #{Dir.pwd}/output",
+    assert_equal("docker run -i --rm --read-only --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:/private/var/spool/cwl docker/whalesay cowsay [ '$input' ] > #{Dir.pwd}/output",
                  cwl_inspect(@cwl, 'commandline',
                              { :args => {},
                                :runtime => { 'outdir' => File.absolute_path('.') },
@@ -38,7 +38,7 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_instantiated_commandline
-    assert_equal("docker run -i --rm --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl docker/whalesay cowsay \'Hello!\' > #{Dir.pwd}/output",
+    assert_equal("docker run -i --rm --read-only --workdir=/private/var/spool/cwl --env=TMPDIR=/tmp --env=HOME=/private/var/spool/cwl --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:/private/var/spool/cwl docker/whalesay cowsay \'Hello!\' > #{Dir.pwd}/output",
                  cwl_inspect(@cwl, 'commandline',
                              {
                                :args => { 'input' => 'Hello!' },
