@@ -380,20 +380,12 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
               value
             end
   elsif value.instance_of? Array
-    value = value.map{ |v|
-      if v.instance_of? Hash
-        case v.fetch('class', '')
-        when 'File', 'Directory'
-          volume_map.fetch(id, v.fetch('path',
-                                       extract_path(v.fetch('location', nil),
-                                                    settings[:doc_dir])))
-        else
-          v
-        end
-      else
-        v
-      end
-    }
+    value = case cwl_fetch(body, '.type', '')
+            when /^File\[\]\??/, /^Directory\[\]\??/
+              volume_map[id]
+            else
+              value
+            end
   end
 
   if value.instance_of? Array
