@@ -463,7 +463,7 @@ def init_inputs_context(cwl, args)
     when 'File'
       # inputs.*
       # inputs.*.location
-      file = args[k]['location']
+      file = args[k].fetch('path', args[k].fetch('location', nil))
       hash = {
         'class' => 'File',
         'path' => File.absolute_path(file),
@@ -487,7 +487,7 @@ def init_inputs_context(cwl, args)
       end
       [k, hash]
     when 'Directory'
-      dir = args[k]['location']
+      dir = args[k].fetch('path', args[k].fetch('location', nil))
       hash = {
         'class' => 'Drectory',
         'path' => File.absolute_path(dir),
