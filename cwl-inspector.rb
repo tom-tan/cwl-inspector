@@ -249,24 +249,33 @@ end
 def to_cmd(cwl, settings)
   docker_cmd, vol_map = docker_cmd(cwl, settings)
 
-  redirect = if cwl_fetch(cwl, '.stdout', nil) or
-               not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
-               fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
-               fname = instantiate_context(cwl, fname, settings)
-               ['>', File.join(settings[:runtime]['outdir'], fname)]
-             elsif cwl_fetch(cwl, '.stderr', nil) or
-                  not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdstderr' }.empty?
-               fname = cwl_fetch(cwl, '.stderr', '$randomized_filename')
-               fname = instantiate_context(cwl, fname, settings)
-               ['2>', File.join(settings[:runtime]['outdir'], fname)]
-             else
-               []
-             end
+  redirect_in = if cwl_fetch(cwl, '.stdin', nil)
+                  fname = inspect_pos(cwl, '.stdin')
+                  fname = instantiate_context(cwl, fname, settings)
+                  ['<', fname]
+                else
+                  []
+                end
+
+  redirect_out = if cwl_fetch(cwl, '.stdout', nil) or
+                   not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdout' }.empty?
+                   fname = cwl_fetch(cwl, '.stdout', '$randomized_filename')
+                   fname = instantiate_context(cwl, fname, settings)
+                   ['>', File.join(settings[:runtime]['outdir'], fname)]
+                 elsif cwl_fetch(cwl, '.stderr', nil) or
+                      not cwl_fetch(cwl, '.outputs', []).find_all{ |k, v| v.fetch('type', '') == 'stdstderr' }.empty?
+                   fname = cwl_fetch(cwl, '.stderr', '$randomized_filename')
+                   fname = instantiate_context(cwl, fname, settings)
+                   ['2>', File.join(settings[:runtime]['outdir'], fname)]
+                 else
+                   []
+                 end
   [
     *docker_cmd,
     *cwl_fetch(cwl, '.baseCommand', []),
     *construct_args(cwl, vol_map, settings),
-    *redirect,
+    *redirect_in,
+    *redirect_out,
   ].join(' ')
 end
 
@@ -443,11 +452,18 @@ end
 
 def init_inputs_context(cwl, args)
   ret = cwl_fetch(cwl, '.inputs', {}).select{ |k, v| args.include? k }.map{ |k, v|
-    case v.fetch('type', nil)
+
+    type = if v.instance_of? String
+             v
+           else # v.instance_of? Hash
+             v.fetch('type', nil)
+           end
+
+    case type
     when 'File'
       # inputs.*
       # inputs.*.location
-      file = args[k]
+      file = args[k]['location']
       hash = {
         'class' => 'File',
         'path' => File.absolute_path(file),
@@ -471,7 +487,7 @@ def init_inputs_context(cwl, args)
       end
       [k, hash]
     when 'Directory'
-      dir = args[k]
+      dir = args[k]['location']
       hash = {
         'class' => 'Drectory',
         'path' => File.absolute_path(dir),
@@ -480,6 +496,7 @@ def init_inputs_context(cwl, args)
       if Dir.exist? dir
         hash['listing'] = Dir.entries(dir).select{ |e| not e.match(/^\.+$/) }
       end
+      [k, hash]
     else
       [k, v]
     end
