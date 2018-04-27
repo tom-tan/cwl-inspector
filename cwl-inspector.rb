@@ -583,7 +583,7 @@ def ls_outputs_for_cmd(cwl, id, settings)
       else
         {
           'class' => 'File',
-          'path' => File.absolute_path(pat),
+          'path' => File.absolute_path(File.join(dir, pat)),
         }
       end
     end
