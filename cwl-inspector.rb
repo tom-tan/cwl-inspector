@@ -404,7 +404,6 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
               value
             end
   end
-
   pre = (body.fetch('prefix', nil) or body.fetch('inputBinding', {}).fetch('prefix', nil))
 
   valuearr = if value.instance_of? Array
@@ -417,6 +416,8 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
                  value = value.join(body.fetch('inputBinding', {}).fetch('itemSeparator', ' '))
                  [pre, value]
                end
+             elsif value.instance_of?(TrueClass) or value.instance_of?(FalseClass)
+               value ? [pre] : []
              else
                type = if type.instance_of?(NilClass) and value.instance_of?(String)
                         'string'
