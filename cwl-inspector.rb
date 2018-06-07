@@ -443,7 +443,7 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
   argstrs = if body.fetch('separate', false)
               [valuearr.join]
             else
-              valuearr
+              valuearr.compact
             end
 
   if value.instance_of?(String) and value.match(/^'\$#{id}'$/) and
