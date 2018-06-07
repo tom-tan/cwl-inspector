@@ -386,7 +386,6 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
             id.nil? ? nil : settings[:args].fetch(id, "$#{id}")
           end
 
-  warn "VAL0: #{value}"
   if value.instance_of? Hash
     value = case value.fetch('class', '')
             when 'File', 'Directory'
