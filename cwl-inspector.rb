@@ -364,8 +364,9 @@ end
 def to_input_param_args(cwl, id, body, settings, volume_map)
   return instantiate_context(cwl, body, settings) if body.instance_of? String
 
-  value = if body.include? 'valueFrom'
-            str = body['valueFrom'].match(/^\s*(.+)\s*$/m)[1].chomp
+  value = if body.include?('valueFrom') or body.fetch('inputBinding', {}).include?('valueFrom')
+            valueFrom = body.fetch('valueFrom', body.fetch('inputBinding', {})['valueFrom'])
+            str = valueFrom.match(/^\s*(.+)\s*$/m)[1].chomp
             instantiate_context(cwl, str, settings)
           elsif body.include? 'default'
             default = body.fetch('default')
