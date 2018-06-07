@@ -386,6 +386,7 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
             id.nil? ? nil : settings[:args].fetch(id, "$#{id}")
           end
 
+  warn "VAL0: #{value}"
   if value.instance_of? Hash
     value = case value.fetch('class', '')
             when 'File', 'Directory'
@@ -404,40 +405,46 @@ def to_input_param_args(cwl, id, body, settings, volume_map)
             end
   end
 
-  if value.instance_of? Array
-    # TODO: Check the behavior if itemSeparator is missing
-    value = value.map{|v| "'#{v}'" } if body.fetch('shellQuote', true) and value.first.instance_of? String
-    value = value.join(body.fetch('inputBinding', {}).fetch('itemSeparator', ' '))
-  else
-    type = cwl_fetch(body, '.type', '')
-    if type.instance_of? String
-      if type.start_with?('string') and body.fetch('shellQuote', true)
-        value = "'#{value}'"
-      elsif type.start_with?('File')
-        value = "'#{value}'"
-      end
-    elsif type.instance_of?(NilClass) and value.instance_of?(String) and
-         body.fetch('shellQuote', true)
-      value = "'#{value}'"
-    end
-  end
-
   pre = (body.fetch('prefix', nil) or body.fetch('inputBinding', {}).fetch('prefix', nil))
 
-  argstrs = if pre
-              if body.fetch('separate', false)
-                [pre, value].join('')
-              else
-                type = body.fetch('type', '')
-                if type.instance_of? String and body.fetch('type', '').start_with? 'boolean'
-                  value ? [pre] : []
-                else
-                  [pre, value]
-                end
-              end
+  valuearr = if value.instance_of? Array
+               if body.fetch('shellQuote', true) and value.first.instance_of? String
+                 value = value.map{|v| "'#{v}'" }
+               end
+               if value.empty?
+                 []
+               else
+                 value = value.join(body.fetch('inputBinding', {}).fetch('itemSeparator', ' '))
+                 [pre, value]
+               end
+             else
+               type = if type.instance_of?(NilClass) and value.instance_of?(String)
+                        'string'
+                      else
+                        cwl_fetch(body, '.type', '')
+                      end
+               if type.instance_of? String
+                 if type.start_with?('string') and body.fetch('shellQuote', true)
+                   value = "'#{value}'"
+                 elsif type.start_with?('File')
+                   value = "'#{value}'"
+                 end
+                 if body.fetch('type', '').start_with? 'boolean'
+                   value ? [pre] : []
+                 else
+                   [pre, value]
+                 end
+               else
+                 [pre, value]
+               end
+             end
+
+  argstrs = if body.fetch('separate', false)
+              [valuearr.join]
             else
-              [value]
+              valuearr
             end
+
   if value.instance_of?(String) and value.match(/^'\$#{id}'$/) and
     cwl_fetch(body, '.type', '').end_with?('?')
     if settings[:args].empty?
