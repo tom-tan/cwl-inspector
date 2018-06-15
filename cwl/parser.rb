@@ -385,7 +385,7 @@ class CommandLineBinding < CWLObject
   end
 end
 
-class CWLInputType
+class CWLType
   attr_reader :type
 
   def self.load(obj)
@@ -393,109 +393,77 @@ class CWLInputType
   end
 
   def initialize(obj)
+    @type = obj
+  end
+
+  def to_h
+    @type
+  end
+end
+
+class CWLInputType
+  def self.load(obj)
     case obj
     when Array
-      unless obj.length == 2 and obj[1] == 'null'
-        raise CWLParseError, "Cannot parse as #{self.class}"
-      end
-      @optional = true
-      @type = self.class.load(obj[0])
+      CommandInputUnionSchema.load(obj)
     when Hash
       unless obj.include? 'type'
         raise CWLParseError, 'Invalid type object: #{obj}'
       end
       case obj['type']
       when 'record'
-        @type = CommandInputRecordSchema.load(obj)
+        CommandInputRecordSchema.load(obj)
       when 'enum'
-        @type = CommandInputEnumSchema.load(obj)
+        CommandInputEnumSchema.load(obj)
       when 'array'
-        @type = CommandInputArraySchema.load(obj)
+        CommandInputArraySchema.load(obj)
       end
     when /^(.+)\?$/
-      @type = self.class.load([$1, 'null'])
+      CommandInputUnionSchema.load([$1, 'null'])
     when /^(.+)\[\]$/
-      @type = self.class.load({
-                                'type' => array,
-                                'items' => $1,
-                              })
-    when 'boolean', 'int', 'long', 'float', 'double',
-         'string', 'File', 'Directory' # CWLType
-      @type = obj
+      CommandInputArraySchema.load({
+                                     'type' => 'array',
+                                     'items' => $1,
+                                   })
+    when 'null', 'boolean', 'int', 'long', 'float', 'double',
+         'string', 'File', 'Directory'
+      CWLType.load(obj)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
     end
-  end
-
-  def optional?
-    @optional
-  end
-
-  def to_h
-    t = if @type.instance_of? String
-          @type
-        else
-          @type.to_h
-        end
-    @optional ? [t, 'null'] :  t
   end
 end
 
 class CWLOutputType
-  attr_reader :type
-
   def self.load(obj)
-    self.new(obj)
-  end
-
-  def initialize(obj)
     case obj
     when Array
-      unless obj.length == 2 and obj[1] == 'null'
-        raise CWLParseError, "Cannot parse as #{self.class}"
-      end
-      @optional = true
-      @type = self.class.load(obj[0])
+      CommandOutputUnionSchema.load(obj)
     when Hash
       unless obj.include? 'type'
         raise CWLParseError, 'Invalid type object: #{obj}'
       end
       case obj['type']
       when 'record'
-        @type = CommandOutputRecordSchema.load(obj)
+        CommandOutputRecordSchema.load(obj)
       when 'enum'
-        @type = CommandOutputEnumSchema.load(obj)
+        CommandOutputEnumSchema.load(obj)
       when 'array'
-        @type = CommandOutputArraySchema.load(obj)
+        CommandOutputArraySchema.load(obj)
       end
     when /^(.+)\?$/
-      @type = self.class.load([$1, 'null'])
+      CommandOutputUnionSchema.load([$1, 'null'])
     when /^(.+)\[\]$/
-      @type = self.class.load({
-                                'type' => array,
-                                'items' => $1,
-                              })
-    when 'stdout', 'stderr'
-      @type = obj
-    when 'boolean', 'int', 'long', 'float', 'double',
-         'string', 'File', 'Directory' # CWLType
-      @type = obj
+      CommandInputArraySchema.load({
+                                     'type' => 'array',
+                                     'items' => $1,
+                                   })
+    when 'null', 'boolean', 'int', 'long', 'float', 'double',
+         'string', 'File', 'Directory'
+      CWLType.load(obj)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
     end
-  end
-
-  def optional?
-    @optional
-  end
-
-  def to_h
-    t = if @type.instance_of? String
-          @type
-        else
-          @type.to_h
-        end
-    @optional ? [t, 'null'] :  t
   end
 end
 
@@ -605,6 +573,30 @@ class Directory < CWLObject
       }
     end
     ret
+  end
+end
+
+class CommandInputUnionSchema < CWLObject
+  attr_reader :types
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless obj.instance_of? Array
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @types = obj.map{ |o|
+      CWLInputType.load(o)
+    }
+  end
+
+  def to_h
+    @types.map{ |t|
+      t.to_h
+    }
   end
 end
 
@@ -789,7 +781,14 @@ class CommandOutputParameter < CWLObject
                 Expression.load(obj['format'])
               end
     @type = if obj.include? 'type'
-              CWLOutputType.load(obj['type'])
+              case obj['type']
+              when 'stdout'
+                Stdout.load(obj['type'])
+              when 'stderr'
+                Stderr.load(obj['type'])
+              else
+                CWLOutputType.load(obj['type'])
+              end
             end
   end
 
@@ -808,6 +807,26 @@ class CommandOutputParameter < CWLObject
     ret['format'] = @format unless @format.nil?
     ret['type'] = @type.to_h unless @type.nil?
     ret
+  end
+end
+
+class Stdout
+  def self.load(obj)
+    self.new
+  end
+
+  def to_h
+    'stdout'
+  end
+end
+
+class Stderr
+  def self.load(obj)
+    self.new
+  end
+
+  def to_h
+    'stderr'
   end
 end
 
@@ -845,6 +864,30 @@ class CommandOutputBinding < CWLObject
     ret['loadContents'] = @loadContents if @loadContents
     ret['outputEval'] = @outputEval.to_h unless @outputEval.nil?
     ret
+  end
+end
+
+class CommandOutputUnionSchema < CWLObject
+  attr_reader :types
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless obj.instance_of? Array
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @types = obj.map{ |o|
+      CWLOutputType.load(o)
+    }
+  end
+
+  def to_h
+    @types.map{ |t|
+      t.to_h
+    }
   end
 end
 
