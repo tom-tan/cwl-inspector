@@ -29,6 +29,74 @@ require 'optparse'
 class CWLParseError < Exception
 end
 
+class CWLInspectionError < Exception
+end
+
+class String
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+
+  def to_h
+    self
+  end
+end
+
+class Array
+  def walk(path)
+    if path.empty?
+      return self
+    end
+
+    idx = path.shift
+    if idx.match(/^\d+$/)
+      i = idx.to_i
+      if i >= self.length
+        raise CWLInspectionError, "Invalid index for #{self.first.class}[]: #{i}"
+      end
+      self[idx.to_i].walk(path)
+    else
+      fst = self.first
+      field = if fst.instance_variable_defined? '@id'
+                '@id'
+              elsif fst.instance_variable_defined? '@class_'
+                '@class_'
+              elsif fst.instance_variable_defined? '@package'
+                '@package'
+              else
+                raise CWLInspectionError, "No such field: #{idx}"
+              end
+      i = self.index{ |e|
+        e.instance_variable_get(field) == idx
+      }
+      if i.nil?
+        raise CWLInspectionError, "No such field: #{idx}"
+      end
+      self[i].walk(path)
+    end
+  end
+
+  def keys
+    fst = self.first
+    field = if fst.instance_variable_defined? '@id'
+              '@id'
+            elsif fst.instance_variable_defined? '@class_'
+              '@class_'
+            elsif fst.instance_variable_defined? '@package'
+              '@package'
+            else
+              raise CWLInspectionError, "Invalid operation `keys` for #{self.first.class}[]"
+            end
+    self.map{ |e|
+      e.instance_variable_get(field)
+    }
+  end
+end
+
 class CommonWorkflowLanguage
   def self.load_file(file)
     obj = YAML.load_file(file)
@@ -64,7 +132,11 @@ class CWLObject
       def subclass.valid?(obj)
         obj.keys.all?{ |k|
           # TODO: check namespaces
-          class_variable_get(:@@fields).map{ |m| m == :class_ ? :class : m }.any?{ |f| f.to_s == k }
+          class_variable_get(:@@fields).map{ |m|
+            m == :class_ ? :class : m
+          }.any?{ |f|
+            f.to_s == k
+          }
         } and satisfies_additional_constraints(obj)
       end
     }
@@ -72,6 +144,22 @@ class CWLObject
 
   def self.satisfies_additional_constraints(obj)
     true
+  end
+
+  def walk(path)
+    if path.empty?
+      return self
+    end
+    field = path.shift
+    f = field == 'class' ? '@class_' : "@#{field}"
+    unless instance_variable_defined? f
+      raise CWLInspectionError, "No such field for #{self.class}: #{field}"
+    end
+    instance_variable_get(f).walk(path)
+  end
+
+  def keys
+    to_h.keys
   end
 end
 
@@ -396,6 +484,14 @@ class CWLType
     @type = obj
   end
 
+  def walk(path)
+    if path.empty?
+      @type
+    else
+      raise CWLInputType, "No such field for #{@type}: #{path}"
+    end
+  end
+
   def to_h
     @type
   end
@@ -591,6 +687,10 @@ class CommandInputUnionSchema < CWLObject
     @types = obj.map{ |o|
       CWLInputType.load(o)
     }
+  end
+
+  def walk(path)
+    @types.walk(path)
   end
 
   def to_h
@@ -815,6 +915,14 @@ class Stdout
     self.new
   end
 
+  def walk(path)
+    if path.empty?
+      'stdout'
+    else
+      raise CWLInputType, "No such field for stdout: #{path}"
+    end
+  end
+
   def to_h
     'stdout'
   end
@@ -823,6 +931,14 @@ end
 class Stderr
   def self.load(obj)
     self.new
+  end
+
+  def walk(path)
+    if path.empty?
+      'stderr'
+    else
+      raise CWLInputType, "No such field for stderr: #{path}"
+    end
   end
 
   def to_h
@@ -882,6 +998,10 @@ class CommandOutputUnionSchema < CWLObject
     @types = obj.map{ |o|
       CWLOutputType.load(o)
     }
+  end
+
+  def walk(path)
+    @types.walk(path)
   end
 
   def to_h
@@ -1751,7 +1871,7 @@ end
 if $0 == __FILE__
   format = :yaml
   opt = OptionParser.new
-  opt.banner = "Usage: #{$0} cwl"
+  opt.banner = "Usage: #{$0} [options] cwl"
   opt.on('-j', '--json', 'Print CWL in JSON format') {
     format = :json
   }
