@@ -50,7 +50,7 @@ def keys(file, path)
 end
 
 def docker_command(cwl, runtime, inputs)
-  return [nil, nil]
+  return [[], {}]
   img = if walk(cwl, '.requirements.DockerRequirement', nil)
           walk(cwl, '.requirements.DockerRequirement', nil)
         elsif walk(cwl, '.hints.DockerRequirement', nil) and system('which docker > /dev/null')
@@ -79,12 +79,20 @@ def docker_command(cwl, runtime, inputs)
     volume_map = {}
 
     inputs.keep_if{ |k, v|
+      # どこかに File か Directory があれば
       v.class_ == 'File' or v.class_ == 'Directory'
     }
   end
 end
 
-def container_command(cwl, runtime, inputs = nil, container = :docker)
+def construct_args(cwl, vol_map, runtime, inputs, self_)
+  walk(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
+    i = walk(body, '.position', 0)
+    [[i, idx], nil]
+  }
+end
+
+def container_command(cwl, runtime, inputs = nil, self_ = nil, container = :docker)
   case container
   when :docker
     docker_command(cwl, runtime, inputs)
@@ -93,13 +101,42 @@ def container_command(cwl, runtime, inputs = nil, container = :docker)
   end
 end
 
-def commandline(file, runtime = {}, inputs = nil)
+def commandline(file, runtime = {}, inputs = nil, self_ = nil)
   cwl = CommonWorkflowLanguage.load_file(file)
-  docker_cmd, val_map = container_command(cwl, runtime, inputs, :docker)
+  docker_cmd, vol_map = container_command(cwl, runtime, inputs, self_, :docker)
 
   redirect_in = if walk(cwl, '.stdin', nil)
-                  cwl.stdin.evaluate(inputs, runtime)
+                  fname = cwl.stdin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                             inputs, runtime, self_)
+                  ['<', fname]
+                else
+                  []
                 end
+
+  redirect_out = if walk(cwl, '.stdout', nil)
+                   fname = cwl.stdout.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                               inputs, runtime, self_)
+                   ['>', File.join(runtime['outdir'], fname)]
+                 else
+                   []
+                 end
+
+  redirect_err = if walk(cwl, '.stderr', nil)
+                   fname = cwl.stderr.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                               inputs, runtime, self_)
+                   ['2>', File.join(runtime['outdir'], fname)]
+                 else
+                   []
+                 end
+
+  [
+    *docker_cmd,
+    *walk(cwl, '.baseCommand', []),
+    # *construct_args(cwl, vol_map, settings),
+    *redirect_in,
+    *redirect_out,
+    *redirect_err,
+  ].join(' ')
 end
 
 def eval_runtime
@@ -154,7 +191,7 @@ if $0 == __FILE__
         when /^keys\((\..*)\)$/
           fmt.call keys(file, $1)
         when /^commandline$/
-          unless walk(file, '.class') != 'CommandLineTool'
+          if walk(file, '.class') != 'CommandLineTool'
             raise CWLInspectionError, "#{walk(file, '.class')} is not support `commandline`"
           end
           commandline(file, runtime, inputs)

@@ -32,6 +32,16 @@ end
 class CWLInspectionError < Exception
 end
 
+class NilClass
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+end
+
 class String
   def walk(path)
     if path.empty?
@@ -115,10 +125,6 @@ class CommonWorkflowLanguage
       raise CWLParseError, 'Cannot parse as #{self}'
     end
   end
-end
-
-def test
-  CommonWorkflowLanguage.load_file('examples/echo/echo.cwl')
 end
 
 class CWLObject
@@ -1836,6 +1842,80 @@ class ResourceRequirement < CWLObject
   end
 end
 
+def evaluate_parameter_reference(exp, inputs, runtime, self_)
+  case exp
+  when /^inputs\./
+    # inputs must be an object, not an array
+  when /^self\./
+    if self_.nil?
+      raise CWLInspectionError, "Unknown context for self in the expression: #{exp}"
+    end
+    # eval
+  when /^runtime\.(.+)$/
+    attr = $1
+    if runtime.include? attr
+      runtime[attr]
+    else
+      raise CWLInspectionError, "Unknown parameter reference: #{exp}"
+    end
+  else
+    raise CWLInspectionError, "Unknown parameter reference: #{exp}"
+  end
+end
+
+def node_bin
+  # TODO: using user specified nodejs executable
+  node = ['node', 'nodejs'].find{ |n|
+    system("which #{n} > /dev/null")
+  }
+  raise "No executables for Nodejs" if node.nil?
+  node
+end
+
+def evaluate_js_expression(expression, inputs, runtime, self_)
+  # invoke js expression
+  node = node_bin
+  exp = expression.start_with?('{') ? "(function() #{exp})()" : exp[1..-2]
+  cmdstr = <<-EOS
+  'use strict'
+  try{
+    process.stdout.write(JSON.stringify((
+function() {
+  const runtime = #{JSON.dump(runtime)};
+  const inputs = #{JSON.dump(inputs)};
+  const self = #{JSON.dump(self_)};
+  return #{exp};
+})()))
+  } catch(e) {
+    process.stdout.write(JSON.stringify({ 'class': 'exception', 'message': `${e.name}: ${e.message}`}))
+  }
+EOS
+  ret = JSON.load(IO.popen([node, '--eval', cmdstr]) { |io| io.gets })
+  if ret.instance_of?(Hash) and
+    ret.fetch('class', '') == 'exception'
+    raise CWLInspectionError, ret['message']
+  end
+  ret
+end
+
+def parameter_reference_regex
+  symbol = /[a-zA-Z0-9]+/
+  singleq = /\['(?:[^']|\\')*'\]/
+  doubleq = /\["(?:[^"]|\\")*"\]/
+  index = /\[\d+\]/
+  segment = /\.#{symbol}|#{singleq}|#{doubleq}|#{index}/
+  parameter_reference = /\$\((#{symbol}#{segment}*)\)/
+  parameter_reference
+end
+
+def ecmascript_expression_regex
+  /\$(\(.+?\))/
+end
+
+def ecmascript_function_body_regex
+  /\$({.+?})/m
+end
+
 class Expression
   def self.load(obj)
     Expression.new(obj)
@@ -1843,6 +1923,54 @@ class Expression
 
   def initialize(exp)
     @expression = exp
+  end
+
+  def walk(path)
+    if path.empty?
+      return @expression
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+
+  def evaluate(use_js, inputs, runtime, self_ = nil)
+    expression = @expression
+
+    rx = use_js ? /\$([({])/ : /\$\(/
+    exp_regex = ecmascript_expression_regex
+    fun_regex = ecmascript_function_body_regex
+    ref_regex = parameter_reference_regex
+
+    pre = ''
+    while expression.match rx
+      kind = $1
+      regex = if use_js
+                case kind
+                when '('
+                  exp_regex
+                when '{'
+                  fun_regex
+                end
+              else
+                ref_regex
+              end
+      m = expression.match regex
+      if m.nil?
+        str = use_js ? 'Javascript expression' : 'parameter reference'
+        raise CWLInspectionError, "Invalid #{str}: #{expression}"
+      end
+      exp = m[1]
+      pre = m.pre_match
+      post = m.post_match
+      ret = if use_js
+              evaluate_js_expression(exp, inputs, runtime, self_)
+            else
+              evaluate_parameter_reference(exp, inputs, runtime, self_)
+            end
+      pre = pre+ret
+      expression = post
+    end
+    pre+expression
   end
 
   def to_h
