@@ -44,9 +44,21 @@ def walk(cwl, path, default=nil)
   end
 end
 
-def keys(file, path)
-  obj = walk(file, path)
-  obj.keys
+def keys(file, path, default=[])
+  obj = walk(file, path, nil)
+  if obj.instance_of?(Array)
+    obj
+  else
+    obj ? obj.keys : default
+  end
+end
+
+class UninstantiatedVariable
+  attr_reader :name
+
+  def initialize(var)
+    @name = var
+  end
 end
 
 def docker_command(cwl, runtime, inputs)
@@ -87,7 +99,9 @@ end
 
 def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
   valueFrom = walk(binding_, '.valueFrom', nil)
-  value = if valueFrom
+  value = if self_.instance_of? UninstantiatedVariable
+            valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
+          elsif valueFrom
             valueFrom.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                                runtime, inputs, self_)
           else
@@ -116,6 +130,9 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
           sep ? tmp.join(' ') : tmp.join
         when nil
           # Add nothing
+        when UninstantiatedVariable
+          tmp = pre ? [pre, self_.name] : [self_.name]
+          walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
         else
           isep = walk(binding_, '.itemSeparator', nil)
           sep = isep.nil? ? true : walk(binding_, '.separate', true)
@@ -179,7 +196,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 
   redirect_in = if walk(cwl, '.stdin', nil)
                   fname = cwl.stdin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                             inputs, runtime, self_)
+                                             runtime, inputs, self_)
                   ['<', fname]
                 else
                   []
@@ -187,7 +204,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 
   redirect_out = if walk(cwl, '.stdout', nil)
                    fname = cwl.stdout.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                               inputs, runtime, self_)
+                                               runtime, inputs, self_)
                    ['>', File.join(runtime['outdir'], fname)]
                  else
                    []
@@ -195,7 +212,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 
   redirect_err = if walk(cwl, '.stderr', nil)
                    fname = cwl.stderr.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                               inputs, runtime, self_)
+                                               runtime, inputs, self_)
                    ['2>', File.join(runtime['outdir'], fname)]
                  else
                    []
@@ -204,7 +221,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
   [
     *docker_cmd,
     *walk(cwl, '.baseCommand', []),
-    *construct_args(cwl, vol_map, inputs, runtime, self_),
+    *construct_args(cwl, vol_map, runtime, inputs, self_),
     *redirect_in,
     *redirect_out,
     *redirect_err,
@@ -229,6 +246,7 @@ end
 
 if $0 == __FILE__
   format = :yaml
+  inputs = nil
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} [options] cwl cmd"
   opt.on('-j', '--json', 'Print result in JSON format') {
@@ -236,6 +254,9 @@ if $0 == __FILE__
   }
   opt.on('-y', '--yaml', 'Print result in YAML format (default)') {
     format = :yaml
+  }
+  opt.on('-i=INPUT', 'Job parameter file for `commandline`') { |inp|
+    inputs = YAML.load_file(inp)
   }
   opt.parse!(ARGV)
 
@@ -255,7 +276,11 @@ if $0 == __FILE__
           ->(a) { JSON.dump(a) }
         end
 
-  inputs = nil
+  if inputs.nil?
+    inputs = Hash[keys(file, '.inputs').map{ |inp|
+      [inp, UninstantiatedVariable.new("$#{inp}")]
+    }]
+  end
   runtime = eval_runtime
 
   ret = case cmd
