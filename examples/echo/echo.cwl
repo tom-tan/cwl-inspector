@@ -3,7 +3,6 @@ cwlVersion: v1.0
 id: echo_cwl
 baseCommand:
   - cowsay
-arguments: ["$aaa)"]
 inputs:
   - id: input
     type: string?
