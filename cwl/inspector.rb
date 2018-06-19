@@ -85,11 +85,83 @@ def docker_command(cwl, runtime, inputs)
   end
 end
 
+def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
+  valueFrom = walk(binding_, '.valueFrom', nil)
+  value = if valueFrom
+            valueFrom.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                               runtime, inputs, self_)
+          else
+            self_
+          end
+
+  pre = walk(binding_, '.prefix', nil)
+  ret = case value
+        when String, Numeric
+          tmp = pre ? [pre, value] : [value]
+          walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+        when TrueClass
+          pre
+        when FalseClass
+          # Add nothing
+        when CWLFile
+          tmp = pre ? [pre, value.path] : [value.path]
+          walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+        # when Directory
+        when CommandInputArraySchema
+          isep = walk(binding_, '.itemSeparator', nil)
+          sep = isep.nil? ? true : walk(binding_, '.separate', true)
+          isep = isep or ' '
+
+          tmp = pre ? [pre, value.join(isep)] : [value.join(isep)]
+          sep ? tmp.join(' ') : tmp.join
+        when nil
+          # Add nothing
+        else
+          isep = walk(binding_, '.itemSeparator', nil)
+          sep = isep.nil? ? true : walk(binding_, '.separate', true)
+          isep = isep or ' '
+
+          tmp = pre ? [pre, value.keys.join(isep)] : [value.keys.join(isep)] # TODO
+          sep ? tmp.join(' ') : tmp.join
+        end
+  if walk(cwl, '.requirements.ShellCommandRequirement', false)
+    walk(binding_, '.shellQuote', true) ? "'#{ret}'" : ret
+  else
+    unless walk(binding_, '.shellQuote', true)
+      raise CWLInspectionError, "`shellQuote' should be used with `ShellCommandRequirement'"
+    end
+    "'#{ret}'"
+  end
+end
+
 def construct_args(cwl, vol_map, runtime, inputs, self_)
-  walk(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
+  arr = walk(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
     i = walk(body, '.position', 0)
-    [[i, idx], nil]
+    [[i, idx], evaluate_input_binding(cwl, body, runtime, inputs, nil)]
+  }+walk(cwl, '.inputs', []).find_all{ |input|
+    walk(input, '.inputBinding', nil)
+  }.map{ |input|
+    i = walk(input, '.inputBinding.position', 0)
+    [[i, input.id], evaluate_input_binding(cwl, input.inputBinding, runtime, inputs, inputs[input.id])]
   }
+
+  arr.sort{ |a, b|
+    a0, b0 = a[0], b[0]
+    if a0[0] == b0[0]
+      a01, b01 = a0[1], b0[1]
+      if a01.class == b01.class
+        a01 <=> b01
+      elsif a01.instance_of? Integer
+        -1
+      else
+        1
+      end
+    else
+      a0[0] <=> b0[0]
+    end
+  }.map{ |v|
+    v[1]
+  }.flatten(1)
 end
 
 def container_command(cwl, runtime, inputs = nil, self_ = nil, container = :docker)
@@ -132,7 +204,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
   [
     *docker_cmd,
     *walk(cwl, '.baseCommand', []),
-    # *construct_args(cwl, vol_map, settings),
+    *construct_args(cwl, vol_map, inputs, runtime, self_),
     *redirect_in,
     *redirect_out,
     *redirect_err,
@@ -140,6 +212,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 end
 
 def eval_runtime
+  # TODO
   {
     'coresMin' => 1,
     'coresMax' => 1,

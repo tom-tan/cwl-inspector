@@ -42,6 +42,16 @@ class NilClass
   end
 end
 
+class Integer
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+end
+
 class String
   def walk(path)
     if path.empty?
@@ -50,9 +60,25 @@ class String
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
   end
+end
 
-  def to_h
-    self
+class TrueClass
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+end
+
+class FalseClass
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
   end
 end
 
@@ -284,7 +310,7 @@ class CommandLineTool < CWLObject
       if arg.instance_of? Hash
         CommandLineBinding.load(arg)
       else
-        Expression.load(arg)
+        CommandLineBinding.load({ 'valueFrom' => arg, })
       end
     }
     @stdin = obj.include?('stdin') ? Expression.load(obj['stdin']) : nil
@@ -1875,7 +1901,7 @@ end
 def evaluate_js_expression(expression, inputs, runtime, self_)
   # invoke js expression
   node = node_bin
-  exp = expression.start_with?('{') ? "(function() #{exp})()" : exp[1..-2]
+  exp = expression.start_with?('{') ? "(function() #{exp})()" : expression[1..-2]
   cmdstr = <<-EOS
   'use strict'
   try{
@@ -1895,6 +1921,7 @@ EOS
     ret.fetch('class', '') == 'exception'
     raise CWLInspectionError, ret['message']
   end
+  # parse object
   ret
 end
 
@@ -1927,7 +1954,7 @@ class Expression
 
   def walk(path)
     if path.empty?
-      return @expression
+      return self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -1967,7 +1994,7 @@ class Expression
             else
               evaluate_parameter_reference(exp, inputs, runtime, self_)
             end
-      pre = pre+ret
+      pre = "#{pre}#{ret}"
       expression = post
     end
     pre+expression
