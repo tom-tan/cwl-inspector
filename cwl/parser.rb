@@ -1936,10 +1936,12 @@ def parameter_reference_regex
 end
 
 def ecmascript_expression_regex
+  # http://www.ecma-international.org/ecma-262/5.1/#sec-11
   /\$(\(.+?\))/
 end
 
 def ecmascript_function_body_regex
+  # http://www.ecma-international.org/ecma-262/5.1/#sec-13
   /\$({.+?})/m
 end
 

@@ -141,13 +141,15 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
           tmp = pre ? [pre, value.keys.join(isep)] : [value.keys.join(isep)] # TODO
           sep ? tmp.join(' ') : tmp.join
         end
-  if walk(cwl, '.requirements.ShellCommandRequirement', false)
+  if walk(cwl, '.requirements.ShellCommandRequirement', false) and ret
     walk(binding_, '.shellQuote', true) ? "'#{ret}'" : ret
   else
     unless walk(binding_, '.shellQuote', true)
       raise CWLInspectionError, "`shellQuote' should be used with `ShellCommandRequirement'"
     end
-    "'#{ret}'"
+    if ret
+      "'#{ret}'"
+    end
   end
 end
 
