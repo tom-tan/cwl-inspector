@@ -124,7 +124,7 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
         when CommandInputArraySchema
           isep = walk(binding_, '.itemSeparator', nil)
           sep = isep.nil? ? true : walk(binding_, '.separate', true)
-          isep = isep or ' '
+          isep = (isep or ' ')
 
           tmp = pre ? [pre, value.join(isep)] : [value.join(isep)]
           sep ? tmp.join(' ') : tmp.join
@@ -133,10 +133,17 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
         when UninstantiatedVariable
           tmp = pre ? [pre, self_.name] : [self_.name]
           walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+        when Array
+          isep = walk(binding_, '.itemSeparator', nil)
+          sep = isep.nil? ? true : walk(binding_, '.separate', true)
+          isep = (isep or ' ')
+
+          tmp = pre ? [pre, value.join(isep)] : [value.join(isep)]
+          sep ? tmp.join(' ') : tmp.join
         else
           isep = walk(binding_, '.itemSeparator', nil)
           sep = isep.nil? ? true : walk(binding_, '.separate', true)
-          isep = isep or ' '
+          isep = (isep or ' ')
 
           tmp = pre ? [pre, value.keys.join(isep)] : [value.keys.join(isep)] # TODO
           sep ? tmp.join(' ') : tmp.join
@@ -246,6 +253,57 @@ def eval_runtime
   }
 end
 
+def parse_inputs(cwl, file)
+  if file.nil?
+    Hash[keys(cwl, '.inputs').map{ |inp|
+           [inp, UninstantiatedVariable.new("$#{inp}")]
+         }]
+  else
+    unless File.exist? file
+      raise CWLInspectionError, "No such file: #{file}"
+    end
+    format = if file.end_with? '.json'
+               :json
+             elsif file.end_with?('.yml') or file.end_with?('.yaml')
+               :yaml
+             else
+               raise CWLInspectionError, "Unknown file format: #{file}"
+             end
+    inputs = if format == :json
+               open(file) { |f|
+                 JSON.load(f)
+               }
+             else
+               YAML.load_file(file)
+             end
+    inputs.map{ |k, v|
+      parse_object(v)
+    }
+  end
+end
+
+def parse_object(obj)
+  case obj
+  when Numeric, String, TrueClass, FalseClass
+    obj
+  when Array
+    obj.map{ |o|
+      parse_object(o)
+    }
+  when Hash
+    case obj.fetch('class', '')
+    when 'File'
+      CWLFile.load(obj)
+    when 'Directory'
+      Directory.load(obj)
+    else
+      raise CWLInspectionError, "Unsupported class: #{obj.fetch('class', '')}"
+    end
+  else
+    raise CWLInspectionError, "Unsupported object: #{obj}"
+  end
+end
+
 if $0 == __FILE__
   format = :yaml
   inputs = nil
@@ -279,9 +337,7 @@ if $0 == __FILE__
         end
 
   if inputs.nil?
-    inputs = Hash[keys(file, '.inputs').map{ |inp|
-      [inp, UninstantiatedVariable.new("$#{inp}")]
-    }]
+    inputs = parse_inputs(file, inputs)
   end
   runtime = eval_runtime
 

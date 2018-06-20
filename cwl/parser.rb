@@ -142,11 +142,11 @@ class CommonWorkflowLanguage
   def self.load(obj)
     case obj.fetch('class', '')
     when 'CommandLineTool'
-      CommandLineTool.new(obj)
+      CommandLineTool.load(obj)
     when 'Workflow'
-      Workflow.new(obj)
+      Workflow.load(obj)
     when 'ExpressionTool'
-      raise 'ExpressionTool is not supported'
+      ExpressionTool.load(obj)
     else
       raise CWLParseError, 'Cannot parse as #{self}'
     end
@@ -440,7 +440,7 @@ class CommandInputParameter < CWLObject
                  raise CWLParseError, "Unsupported `default` in #{self.class}"
                end
     @type = if obj.include? 'type'
-              CWLInputType.load(obj['type'])
+              CWLCommandInputType.load(obj['type'])
             end
   end
 
@@ -520,7 +520,7 @@ class CWLType
     if path.empty?
       @type
     else
-      raise CWLInputType, "No such field for #{@type}: #{path}"
+      raise CWLParseError, "No such field for #{@type}: #{path}"
     end
   end
 
@@ -530,6 +530,39 @@ class CWLType
 end
 
 class CWLInputType
+  def self.load(obj)
+    case obj
+    when Array
+      InputUnionSchema.load(obj)
+    when Hash
+      unless obj.include? 'type'
+        raise CWLParseError, 'Invalid type object: #{obj}'
+      end
+      case obj['type']
+      when 'record'
+        InputRecordSchema.load(obj)
+      when 'enum'
+        InputEnumSchema.load(obj)
+      when 'array'
+        InputArraySchema.load(obj)
+      end
+    when /^(.+)\?$/
+      InputUnionSchema.load([$1, 'null'])
+    when /^(.+)\[\]$/
+      InputArraySchema.load({
+                                     'type' => 'array',
+                                     'items' => $1,
+                                   })
+    when 'null', 'boolean', 'int', 'long', 'float', 'double',
+         'string', 'File', 'Directory'
+      CWLType.load(obj)
+    else
+      raise CWLParseError, "Unimplemented type: #{obj}"
+    end
+  end
+end
+
+class CWLCommandInputType
   def self.load(obj)
     case obj
     when Array
@@ -566,6 +599,39 @@ class CWLOutputType
   def self.load(obj)
     case obj
     when Array
+      OutputUnionSchema.load(obj)
+    when Hash
+      unless obj.include? 'type'
+        raise CWLParseError, 'Invalid type object: #{obj}'
+      end
+      case obj['type']
+      when 'record'
+        OutputRecordSchema.load(obj)
+      when 'enum'
+        OutputEnumSchema.load(obj)
+      when 'array'
+        OutputArraySchema.load(obj)
+      end
+    when /^(.+)\?$/
+      OutputUnionSchema.load([$1, 'null'])
+    when /^(.+)\[\]$/
+      OutputArraySchema.load({
+                               'type' => 'array',
+                               'items' => $1,
+                             })
+    when 'null', 'boolean', 'int', 'long', 'float', 'double',
+         'string', 'File', 'Directory'
+      CWLType.load(obj)
+    else
+      raise CWLParseError, "Unimplemented type: #{obj}"
+    end
+  end
+end
+
+class CWLCommandOutputType
+  def self.load(obj)
+    case obj
+    when Array
       CommandOutputUnionSchema.load(obj)
     when Hash
       unless obj.include? 'type'
@@ -582,7 +648,7 @@ class CWLOutputType
     when /^(.+)\?$/
       CommandOutputUnionSchema.load([$1, 'null'])
     when /^(.+)\[\]$/
-      CommandInputArraySchema.load({
+      CommandOutputArraySchema.load({
                                      'type' => 'array',
                                      'items' => $1,
                                    })
@@ -594,6 +660,7 @@ class CWLOutputType
     end
   end
 end
+
 
 class CWLFile < CWLObject
   cwl_object_preamble :class_, :location, :path, :basename, :dirname,
@@ -717,7 +784,7 @@ class CommandInputUnionSchema < CWLObject
     end
 
     @types = obj.map{ |o|
-      CWLInputType.load(o)
+      CWLCommandInputType.load(o)
     }
   end
 
@@ -786,7 +853,7 @@ class CommandInputRecordField < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLInputType.load(obj['type'])
+    @type = CWLCommandInputType.load(obj['type'])
     @doc = obj.fetch('doc', nil)
     @inputBinding = if obj.include? 'inputBinding'
                       CommandLineBinding.load(obj['inputBinding'])
@@ -857,7 +924,7 @@ class CommandInputArraySchema < CWLObject
     unless valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @items = CWLInputType.load(obj['items'])
+    @items = CWLCommandInputType.load(obj['items'])
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @inputBinding = if obj.include? 'inputBinding'
@@ -919,7 +986,7 @@ class CommandOutputParameter < CWLObject
               when 'stderr'
                 Stderr.load(obj['type'])
               else
-                CWLOutputType.load(obj['type'])
+                CWLCommandOutputType.load(obj['type'])
               end
             end
   end
@@ -951,7 +1018,7 @@ class Stdout
     if path.empty?
       'stdout'
     else
-      raise CWLInputType, "No such field for stdout: #{path}"
+      raise CWLParseError, "No such field for stdout: #{path}"
     end
   end
 
@@ -969,7 +1036,7 @@ class Stderr
     if path.empty?
       'stderr'
     else
-      raise CWLInputType, "No such field for stderr: #{path}"
+      raise CWLParseError, "No such field for stderr: #{path}"
     end
   end
 
@@ -1028,7 +1095,7 @@ class CommandOutputUnionSchema < CWLObject
     end
 
     @types = obj.map{ |o|
-      CWLOutputType.load(o)
+      CWLCommandOutputType.load(o)
     }
   end
 
@@ -1060,7 +1127,7 @@ class CommandOutputRecordSchema < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
-    @fields = obj.fetch('fields').map{ |f|
+    @fields = obj.fetch('fields', []).map{ |f|
       CommandOutputRecordField.load(f)
     }
     @label = obj.fetch('label', nil)
@@ -1097,7 +1164,7 @@ class CommandOutputRecordField < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLOutputType.load(obj['type'])
+    @type = CWLCommandOutputType.load(obj['type'])
     @doc = obj.fetch('doc', nil)
     @outputBinding = if obj.include? 'outputBinding'
                        CommandOutputBinding.load(obj['outputBinding'])
@@ -1166,7 +1233,7 @@ class CommandOutputArraySchema < CWLObject
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @items = CWLOutputType.load(obj['items'])
+    @items = CWLCommandOutputType.load(obj['items'])
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @outputBinding = if obj.include? 'outputBinding'
@@ -1317,7 +1384,7 @@ class InputRecordField < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLOutputType.load(obj['type'])
+    @type = CWLInputType.load(obj['type'])
     @doc = obj.fetch('doc', nil)
     @inputBinding = if obj.include? 'inputBinding'
                       CommandLineBinding.load(obj['inputBinding'])
@@ -1899,19 +1966,18 @@ def node_bin
 end
 
 def evaluate_js_expression(expression, inputs, runtime, self_)
-  # invoke js expression
   node = node_bin
-  exp = expression.start_with?('{') ? "(function() #{exp})()" : expression[1..-2]
+  exp = expression.start_with?('{') ? "(function() #{expression.gsub(/\n/, '\n')})()" : expression[1..-2]
+  exp = exp.gsub(/"/, '\"')
   cmdstr = <<-EOS
   'use strict'
   try{
-    process.stdout.write(JSON.stringify((
-function() {
-  const runtime = #{JSON.dump(runtime)};
-  const inputs = #{JSON.dump(inputs)};
-  const self = #{JSON.dump(self_)};
-  return #{exp};
-})()))
+    const exp = "#{exp}";
+    process.stdout.write(JSON.stringify(require('vm').runInNewContext(exp, {
+      'runtime': #{JSON.dump(runtime)},
+      'inputs': #{JSON.dump(inputs)},
+      'self': #{JSON.dump(self_)}
+    })));
   } catch(e) {
     process.stdout.write(JSON.stringify({ 'class': 'exception', 'message': `${e.name}: ${e.message}`}))
   }
@@ -1919,7 +1985,7 @@ EOS
   ret = JSON.load(IO.popen([node, '--eval', cmdstr]) { |io| io.gets })
   if ret.instance_of?(Hash) and
     ret.fetch('class', '') == 'exception'
-    raise CWLInspectionError, ret['message']
+    raise CWLInspectionError, "#{ret['message']} in expression '#{expression}'"
   end
   # parse object
   ret
@@ -1937,12 +2003,12 @@ end
 
 def ecmascript_expression_regex
   # http://www.ecma-international.org/ecma-262/5.1/#sec-11
-  /\$(\(.+?\))/
+  /\$(\(.+\))/
 end
 
 def ecmascript_function_body_regex
   # http://www.ecma-international.org/ecma-262/5.1/#sec-13
-  /\$({.+?})/m
+  /\$({.+})/m
 end
 
 class Expression
@@ -1963,14 +2029,14 @@ class Expression
   end
 
   def evaluate(use_js, inputs, runtime, self_ = nil)
-    expression = @expression
+    expression = @expression.chomp
 
     rx = use_js ? /\$([({])/ : /\$\(/
     exp_regex = ecmascript_expression_regex
     fun_regex = ecmascript_function_body_regex
     ref_regex = parameter_reference_regex
 
-    pre = ''
+    evaled = nil
     while expression.match rx
       kind = $1
       regex = if use_js
@@ -1996,10 +2062,20 @@ class Expression
             else
               evaluate_parameter_reference(exp, inputs, runtime, self_)
             end
-      pre = "#{pre}#{ret}"
+      evaled = if evaled.nil? and pre.empty?
+                 ret
+               else
+                 "#{evaled}#{pre}#{ret}"
+               end
       expression = post
     end
-    pre+expression
+    if evaled.nil?
+      expression
+    elsif expression.empty?
+      evaled
+    else
+      "#{evaled}#{expression}"
+    end
   end
 
   def to_h
@@ -2024,6 +2100,1154 @@ class CWLVersion
   end
 end
 
+class Workflow < CWLObject
+  cwl_object_preamble :inputs, :outputs, :class_, :steps, :id, :requirements,
+                      :hints, :label, :doc, :cwlVersion
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      ['inputs', 'outputs', 'class', 'steps'].all?{ |f| obj.include? f } and
+      obj['class'] == 'Workflow'
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @inputs = if obj['inputs'].instance_of? Array
+                obj['inputs'].map{ |o|
+                  InputParameter.load(o)
+                }
+              else
+                obj['inputs'].map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'id' => k,
+                          'type' => v,
+                        }
+                      else
+                        o = {}
+                        o['id'] = k
+                        v.each{ |f, val|
+                          o[f] = val
+                        }
+                        o
+                      end
+                  InputParameter.load(o)
+                }
+              end
+
+    @outputs = if obj['outputs'].instance_of? Array
+                 obj['outputs'].map{ |o|
+                   WorkflowOutputParameter.load(o)
+                 }
+               else
+                 obj['outputs'].map{ |k, v|
+                   o = if v.instance_of? String or
+                         v.instance_of? Array or
+                         ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                         {
+                           'id' => k,
+                           'type' => v,
+                         }
+                       else
+                         o = {}
+                         o['id'] = k
+                         v.each{ |f, val|
+                           o[f] = val
+                         }
+                         o
+                       end
+                   WorkflowOutputParameter.load(o)
+                 }
+               end
+    @class_ = obj['class']
+    @steps = obj['steps'].map{ |s|
+      WorkflowStep.load(s)
+    }
+    @id = obj.fetch('id', nil)
+    reqs = if obj.fetch('requirements', []).instance_of? Array
+             obj.fetch('requirements', [])
+           else
+             obj['requirements'].map{ |k, v|
+               o = {}
+               o['class'] = k
+               v.each{ |f, val|
+                 o[f] = val
+               }
+               o
+             }
+           end
+    @requirements = reqs.map{ |r|
+      self.class.load_requirement(r)
+    }
+
+    hints = if obj.fetch('hints', []).instance_of? Array
+              obj.fetch('hints', [])
+            else
+              obj['hints'].map{ |k, v|
+                o = {}
+                o['class'] = k
+                v.each{ |f, val|
+                  o[f] = val
+                }
+                o
+              }
+            end
+    @hints = hints.map{ |h|
+      self.class.load_requirement(h)
+    }
+
+    @label = obj.fetch('label', nil)
+    @doc = obj.fetch('doc', nil)
+    @cwlVersion = obj.fetch('cwlVersion', nil)
+  end
+
+  def self.load_requirement(req)
+    unless req.include? 'class'
+      raise CWLParseError, 'Invalid requriment object'
+    end
+
+    case req['class']
+    when 'InlineJavascriptRequirement'
+      InlineJavascriptRequirement.load(req)
+    when 'SchemaDefRequirement'
+      SchemaDefRequirement.load(req)
+    when 'DockerRequirement'
+      DockerRequirement.load(req)
+    when 'SoftwareRequirement'
+      SoftwareRequirement.load(req)
+    when 'InitialWorkDirRequirement'
+      InitialWorkDirRequirement.load(req)
+    when 'EnvVarRequirement'
+      EnvVarRequirement.load(req)
+    when 'ShellCommandRequirement'
+      ShellCommandRequirement.load(req)
+    when 'ResourceRequirement'
+      ResourceRequirement.load(req)
+    when 'SubworkflowFeatureRequirement'
+      SubworkflowFeatureRequirement.load(req)
+    when 'ScatterFeatureRequirement'
+      ScatterFeatureRequirement.load(req)
+    when 'MultipleInputFeatureRequirement'
+      MultipleInputFeatureRequirement.load(req)
+    when 'StepInputExpressionRequirement'
+      StepInputExpressionRequirement.load(req)
+    else
+      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+    end
+  end
+
+  def to_h
+    ret = {}
+    ret['inputs'] = @inputs.map{ |inp|
+      inp.to_h
+    }
+    ret['outputs'] = @outputs.map{ |out|
+      out.to_h
+    }
+    ret['class'] = @class_
+    ret['steps'] = @steps.map{ |st|
+      st.to_h
+    }
+    unless @id.nil?
+      ret['id'] = @id
+    end
+
+    unless @requirements.empty?
+      ret['requirements'] = @requirements.map{ |r|
+        r.to_h
+      }
+    end
+
+    unless @hints.empty?
+      ret['hints'] = @hints.map{ |h|
+        h.to_h
+      }
+    end
+
+    unless @label.nil?
+      ret['label'] = @label
+    end
+
+    unless @doc.nil?
+      ret['doc'] = @doc
+    end
+
+    unless @cwlVersion.nil?
+      ret['cwlVersion'] = @cwlVersion
+    end
+    ret
+  end
+end
+
+class WorkflowOutputParameter < CWLObject
+  cwl_object_preamble :id, :label, :secondaryFiles, :streamable,
+                      :doc, :outputBinding, :format, :outputSource,
+                      :linkMerge, :type
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      ['id'].all?{ |f| obj.include? f }
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @id = obj['id']
+    @label = obj.fetch('label', nil)
+    @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
+                        obj.fetch('secondaryFiles', []).map{ |sec|
+                          Expression.load(sec)
+                        }
+                      else
+                        [Expression.load(obj['secondaryFiles'])]
+                      end
+    @streamable = obj.fetch('streamable', false)
+    @doc = if obj.include? 'doc'
+             obj['doc'].instance_of?(Array) ? obj['doc'].join : obj['doc']
+           end
+    @outputBinding = if obj.include? 'outputBinding'
+                       CommandOutputBinding.load(obj['outputBinding'])
+                     end
+    @format = if obj.include? 'format'
+                Expression.load(obj['format'])
+              end
+    @outputSource = if obj.fetch('outputSource', []).instance_of? Array
+                      obj.fetch('outputSource', [])
+                    else
+                      [obj['outputSource']]
+                    end
+    @linkMerge = if obj.include? 'linkMerge'
+                   LinkMergeMethod.load(obj['linkMerge'])
+                 else
+                   LinkMergeMethod.load('merge_nested')
+                 end
+    @type = if obj.include? 'type'
+              CWLOutputType.load(obj['type'])
+            end
+  end
+
+  def to_h
+    ret = {}
+    ret['id'] = @id
+
+    unless @label.nil?
+      ret['label'] = @label
+    end
+
+    unless @secondaryFiles.empty?
+      ret['secondaryFiles'] = @secondaryFiles.map{ |s|
+        s.to_h
+      }
+    end
+
+    if @streamable
+      ret['streamable'] = @streamable
+    end
+
+    unless @doc.nil?
+      ret['doc'] = @doc
+    end
+
+    unless @outputBinding.nil?
+      ret['outputBinding'] = @outputBinding.to_h
+    end
+
+    unless @format.nil?
+      ret['format'] = @format.to_h
+    end
+
+    unless @outputSource.empty?
+      ret['outputSource'] = @outputSource
+    end
+
+    unless @linkMerge != 'merge_nested'
+      ret['linkMerge'] = @linkMerge
+    end
+
+    unless @type.nil?
+      ret['type'] = @type.to_h
+    end
+
+    ret
+  end
+end
+
+class LinkMergeMethod
+  def self.load(obj)
+    case obj
+    when 'merge_nested', 'merge_flattened'
+      obj
+    else
+      raise CWLInspectionError, "Invalid LinkMergeMethod: #{obj}"
+    end
+  end
+end
+
+class OutputRecordSchema < CWLObject
+  cwl_object_preamble :type, :fields, :label
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.fetch('type', '') == 'record'
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @type = obj['type']
+    @fields = obj.fetch('fields', []).map{ |f|
+      OutputRecordField.load(f)
+    }
+    @label = obj.fetch('label', nil)
+  end
+
+  def to_h
+    ret = {}
+    ret['type'] = @type
+    unless @fields.empty?
+      ret['fields'] = @fields.map{ |f|
+        f.to_h
+      }
+    end
+    ret['label'] = @label unless @label.nil?
+    ret
+  end
+end
+
+class OutputRecordField < CWLObject
+  cwl_object_preamble :name, :type, :doc, :outputBinding
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('name') and
+      obj.include?('type')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @name = obj['name']
+    @type = CWLOutputType.load(obj['type'])
+    @doc = obj.fetch('doc', nil)
+    @outputBinding = if obj.include? 'outputBinding'
+                       CommandOutputBinding.load(obj['outputBinding'])
+                     end
+  end
+
+  def to_h
+    ret = {}
+    ret['name'] = @name
+    ret['type'] = @type.to_h
+    ret['doc'] = @doc unless @doc.nil?
+    ret['outputBinding'] = @outputBinding.to_h unless @outputBinding.nil?
+    ret
+  end
+end
+
+class OutputEnumSchema < CWLObject
+  cwl_object_preamble :symbols, :type, :label, :outputBinding
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('symbols') and
+      obj.include?('type')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @symbols = obj['symbols']
+    @type = obj['type']
+    @label = obj.fetch('label', nil)
+    @outputBinding = if obj.include? 'outputBinding'
+                       CommandOutputBinding.load(obj['outputBinding'])
+                     end
+  end
+
+  def to_h
+    ret = {}
+    ret['symbols'] = @symbols
+    ret['type'] = @type
+    unless @label.nil?
+      ret['label'] = @label
+    end
+    unless @outputBinding.nil?
+      ret['outputBinding'] = @outputBinding.to_h
+    end
+    ret
+  end
+end
+
+class OutputArraySchema < CWLObject
+  cwl_object_preamble :items, :type, :label, :outputBinding
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('items') and
+      obj.include?('type')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @items = CWLOutputType.load(obj['items'])
+    @type = obj['type']
+    @label = obj.fetch('label', nil)
+    @outputBinding = if obj.include? 'outputBinding'
+                       CommandOutputBinding.load(obj['outputBinding'])
+                     end
+  end
+
+  def to_h
+    ret = {}
+    ret['items'] = @items.to_h
+    ret['type'] = @type
+    unless @label.nil?
+      ret['label'] = @label
+    end
+    unless @outputBinding.nil?
+      ret['outputBinding'] = @outputBinding.to_h
+    end
+  end
+end
+
+class WorkflowStep < CWLObject
+  cwl_object_preamble :id, :in, :out, :run, :requirements,
+                      :hints, :label, :doc, :scatter, :scatterMethod
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('id') and
+      obj.include?('in') and
+      obj.include?('out') and
+      obj.include?('run')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @id = obj['id']
+    @in = if obj['in'].instance_of? Array
+            obj['in'].map{ |o|
+              WorkflowStepInput.load(o)
+            }
+          else
+            obj['in'].map{ |k, v|
+              o = if v.instance_of? String or
+                    v.instance_of? Array
+                    {
+                      'id' => k,
+                      'source' => v,
+                    }
+                  else
+                    o = {}
+                    o['id'] = k
+                    v.each{ |f, val|
+                      o[f] = val
+                    }
+                    o
+                  end
+              WorkflowStepInput.load(o)
+            }
+          end
+    @out = obj['out'].map{ |o|
+      if o.instance_of? String
+        WorkflowStepInput.load({ 'id' => o,})
+      else
+        WorkflowStepOutput.load(o)
+      end
+    }
+    @run = if obj['run'].instance_of? String
+             obj['run']
+           else
+             CommonWorkflowLanguage.load(obj['run'])
+           end
+    reqs = if obj.fetch('requirements', []).instance_of? Array
+             obj.fetch('requirements', [])
+           else
+             obj['requirements'].map{ |k, v|
+               o = {}
+               o['class'] = k
+               v.each{ |f, val|
+                 o[f] = val
+               }
+               o
+             }
+           end
+    @requirements = reqs.map{ |r|
+      self.class.load_requirement(r)
+    }
+
+    hints = if obj.fetch('hints', []).instance_of? Array
+              obj.fetch('hints', [])
+            else
+              obj['hints'].map{ |k, v|
+                o = {}
+                o['class'] = k
+                v.each{ |f, val|
+                  o[f] = val
+                }
+                o
+              }
+            end
+    @hints = hints.map{ |h|
+      self.class.load_requirement(h)
+    }
+
+    @label = obj.fetch('label', nil)
+    @doc = obj.fetch('doc', nil)
+    @scatter = if obj.fetch('scatter', []).instance_of? Array
+                 obj.fetch('scatter', [])
+               else
+                 [obj['scatter']]
+               end
+    @scatterMethod = if obj.include? 'scatterMethod'
+                       ScatterMethod.load(obj['scatterMethod'])
+                     end
+  end
+
+  def self.load_requirement(req)
+    unless req.include? 'class'
+      raise CWLParseError, 'Invalid requriment object'
+    end
+
+    case req['class']
+    when 'InlineJavascriptRequirement'
+      InlineJavascriptRequirement.load(req)
+    when 'SchemaDefRequirement'
+      SchemaDefRequirement.load(req)
+    when 'DockerRequirement'
+      DockerRequirement.load(req)
+    when 'SoftwareRequirement'
+      SoftwareRequirement.load(req)
+    when 'InitialWorkDirRequirement'
+      InitialWorkDirRequirement.load(req)
+    when 'EnvVarRequirement'
+      EnvVarRequirement.load(req)
+    when 'ShellCommandRequirement'
+      ShellCommandRequirement.load(req)
+    when 'ResourceRequirement'
+      ResourceRequirement.load(req)
+    when 'SubworkflowFeatureRequirement'
+      SubworkflowFeatureRequirement.load(req)
+    when 'ScatterFeatureRequirement'
+      ScatterFeatureRequirement.load(req)
+    when 'MultipleInputFeatureRequirement'
+      MultipleInputFeatureRequirement.load(req)
+    when 'StepInputExpressionRequirement'
+      StepInputExpressionRequirement.load(req)
+    else
+      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+    end
+  end
+
+  def to_h
+    ret = {}
+    ret['id'] = @id
+    ret['in'] = @in.map{ |i|
+      i.to_h
+    }
+    ret['out'] = @out.map{ |o|
+      o.to_h
+    }
+    ret['run'] = @run.to_h
+    unless @reqirement.empty?
+      ret['reqirements'] = @reqirements.map{ |r|
+        r.to_h
+      }
+    end
+    unless @hints.empty?
+      ret['hints'] = @hints.map{ |h|
+        h.to_i
+      }
+    end
+    unless @label.nil?
+      ret['label'] = @label
+    end
+    unless @doc.nil?
+      ret['doc'] = @doc
+    end
+    unless @scatter.empty?
+      ret['scatter'] = @scatter
+    end
+    unless @scatterMethod.nil?
+      ret['scatterMethod'] = @scatterMethod
+    end
+    ret
+  end
+end
+
+class WorkflowStepInput < CWLObject
+  cwl_object_preamble :id, :source, :linkMerge, :default, :valueFrom
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('id')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @id = obj['id']
+    @source = if obj.fetch('source', []).instance_of? Array
+                obj.fetch('source', [])
+              else
+                [obj['source']]
+              end
+    @linkMerge = if obj.include? 'linkMerge'
+                   LinkMergeMethod.load(obj['linkMerge'])
+                 else
+                   LinkMergeMethod.load('merge_nested')
+                 end
+    @default = if obj.include? 'default'
+                 # type?
+                 raise CWLParseError, "Unsupported `default` in #{self.class}"
+               end
+    @valueFrom = if obj.include? 'valueFrom'
+                   Expression.load(obj['valueFrom'])
+                 end
+  end
+
+  def to_h
+    ret = {}
+    ret['id'] = @id
+    unless @source.empty?
+      ret['source'] = @source
+    end
+    unless @linkMerge == 'merge_nested'
+      ret['linkMerge'] = @linkMerge
+    end
+    unless @default.nil?
+      ret['default'] = @default
+    end
+    unless @valueFrom.nil?
+      ret['valueFrom'] = @valueFrom.to_h
+    end
+    ret
+  end
+end
+
+class WorkflowStepOutput < CWLObject
+  cwl_object_preamble :id
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('id')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @id = obj['id']
+  end
+
+  def to_h
+    {
+      'id' => @id,
+    }
+  end
+end
+
+class ScatterMethod
+  def self.load(obj)
+    case obj
+    when 'dotproduct', 'nested_crossproduct', 'flat_crossproduct'
+      obj
+    else
+      raise CWLParseError, "Unsupported scatter method: #{obj}"
+    end
+  end
+end
+
+class SubworkflowFeatureRequirement < CWLObject
+  cwl_object_preamble :class_
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.fetch('class', '') == 'SubworkflowFeatureRequirement'
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @class_ = obj['class']
+  end
+
+  def to_h
+    {
+      'class' => @class_,
+    }
+  end
+end
+
+class ScatterFeatureRequirement < CWLObject
+  cwl_object_preamble :class_
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.fetch('class', '') == 'ScatterFeatureRequirement'
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @class_ = obj['class']
+  end
+
+  def to_h
+    {
+      'class' => @class_,
+    }
+  end
+end
+
+class MultipleInputFeatureRequirement < CWLObject
+  cwl_object_preamble :class_
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.fetch('class', '') == 'MultipleInputFeatureRequirement'
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @class_ = obj['class']
+  end
+
+  def to_h
+    {
+      'class' => @class_,
+    }
+  end
+end
+
+class StepInputExpressionRequirement < CWLObject
+  cwl_object_preamble :class_
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.fetch('class', '') == 'StepInputExpressionRequirement'
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @class_ = obj['class']
+  end
+
+  def to_h
+    {
+      'class' => @class_,
+    }
+  end
+end
+
+class ExpressionTool < CWLObject
+  cwl_object_preamble :inputs, :outputs, :class_, :expression,
+                      :id, :reqirements, :hints, :label,
+                      :doc, :cwlVersion
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('inputs') and
+      obj.include?('outputs') and
+      obj.fetch('class', '') == 'ExpressionTool' and
+      obj.include?('expression')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+    @inputs = if obj['inputs'].instance_of? Array
+                obj['inputs'].map{ |o|
+                  InputParameter.load(o)
+                }
+              else
+                obj['inputs'].map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'id' => k,
+                          'type' => v,
+                        }
+                      else
+                        o = {}
+                        o['id'] = k
+                        v.each{ |f, val|
+                          o[f] = val
+                        }
+                        o
+                      end
+                  InputParameter.load(o)
+                }
+              end
+    @outputs = if obj['outputs'].instance_of? Array
+                obj['outputs'].map{ |o|
+                  ExpressionToolOutputParameter.load(o)
+                }
+              else
+                obj['outputs'].map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'id' => k,
+                          'type' => v,
+                        }
+                      else
+                        o = {}
+                        o['id'] = k
+                        v.each{ |f, val|
+                          o[f] = val
+                        }
+                        o
+                      end
+                  ExpressionToolOutputParameter.load(o)
+                }
+               end
+    @class_ = obj['class']
+    @expression = Expression.load(obj['expression'])
+    @id = obj.fetch('id', nil)
+    reqs = if obj.fetch('requirements', []).instance_of? Array
+             obj.fetch('requirements', [])
+           else
+             obj['requirements'].map{ |k, v|
+               o = {}
+               o['class'] = k
+               v.each{ |f, val|
+                 o[f] = val
+               }
+               o
+             }
+           end
+    @requirements = reqs.map{ |r|
+      self.class.load_requirement(r)
+    }
+
+    hints = if obj.fetch('hints', []).instance_of? Array
+              obj.fetch('hints', [])
+            else
+              obj['hints'].map{ |k, v|
+                o = {}
+                o['class'] = k
+                v.each{ |f, val|
+                  o[f] = val
+                }
+                o
+              }
+            end
+    @hints = hints.map{ |h|
+      self.class.load_requirement(h)
+    }
+    @label = obj.fetch('label', nil)
+    @doc = obj.fetch('doc', nil)
+    @cwlVersion = obj.fetch('cwlVersion', nil)
+  end
+
+  def self.load_requirement(req)
+    unless req.include? 'class'
+      raise CWLParseError, 'Invalid requriment object'
+    end
+
+    case req['class']
+    when 'InlineJavascriptRequirement'
+      InlineJavascriptRequirement.load(req)
+    when 'SchemaDefRequirement'
+      SchemaDefRequirement.load(req)
+    when 'DockerRequirement'
+      DockerRequirement.load(req)
+    when 'SoftwareRequirement'
+      SoftwareRequirement.load(req)
+    when 'InitialWorkDirRequirement'
+      InitialWorkDirRequirement.load(req)
+    when 'EnvVarRequirement'
+      EnvVarRequirement.load(req)
+    when 'ShellCommandRequirement'
+      ShellCommandRequirement.load(req)
+    when 'ResourceRequirement'
+      ResourceRequirement.load(req)
+    when 'SubworkflowFeatureRequirement'
+      SubworkflowFeatureRequirement.load(req)
+    when 'ScatterFeatureRequirement'
+      ScatterFeatureRequirement.load(req)
+    when 'MultipleInputFeatureRequirement'
+      MultipleInputFeatureRequirement.load(req)
+    when 'StepInputExpressionRequirement'
+      StepInputExpressionRequirement.load(req)
+    else
+      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+    end
+  end
+
+  def to_h
+    ret = {}
+    ret['inputs'] = @inputs.map{ |inp|
+      inp.to_h
+    }
+    ret['outputs'] = @outputs.map{ |out|
+      out.to_h
+    }
+    ret['class'] = @class_
+    ret['expression'] = @expression.to_h
+    unless @id.nil?
+      ret['id'] = @id
+    end
+    unless @reqirement.empty?
+      ret['requirements'] = @requirements.map{ |r|
+        r.to_h
+      }
+    end
+    unless @hints.empty?
+      ret['hints'] = @hints.map{ |h|
+        h.to_h
+      }
+    end
+    unless @label.nil?
+      ret['label'] = @label
+    end
+    unless @doc.nil?
+      ret['doc'] = @doc
+    end
+    unless @cwlVersion.nil?
+      ret['cwlVersion'] = @cwlVersion
+    end
+    ret
+  end
+end
+
+class InputParameter < CWLObject
+  cwl_object_preamble :id, :label, :secondaryFiles, :streamable,
+                      :doc, :format, :inputBinding, :default, :type
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('id')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @id = obj['id']
+    @label = obj.fetch('label', nil)
+    @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
+                        obj.fetch('secondaryFiles', []).map{ |sec|
+                          Expression.load(sec)
+                        }
+                      else
+                        [Expression.load(obj['secondaryFiles'])]
+                      end
+    @streamable = obj.fetch('streamable', false)
+    @doc = if obj.include? 'doc'
+             obj['doc'].instance_of?(Array) ? obj['doc'].join : obj['doc']
+           end
+    @format = if obj.fetch('format', []).instance_of? Array
+                obj.fetch('format', []).map{ |f|
+                  Expression.load(f)
+                }
+              else
+                [Expression.load(obj['format'])]
+              end
+    @inputBinding = if obj.include? 'inputBinding'
+                      CommandLineBinding.load(obj['inputBinding'])
+                    end
+    @default = if obj.include? 'default'
+                 raise CWLParseError, "Unsupported `default` in #{self.class}"
+               end
+    @type = if obj.include? 'type'
+              CWLInputType.load(obj['type'])
+            end
+  end
+
+  def to_h
+    ret = {}
+    ret['id'] = @id
+    unless @label.nil?
+      ret['label'] = @label
+    end
+    unless @secondaryFiles.empty?
+      ret['secondaryFiles'] = @secondaryFiles.map{ |s|
+        s.to_h
+      }
+    end
+    if @streamable
+      ret['streamable'] = @streamable
+    end
+    unless @doc.nil?
+      ret['doc'] = @doc
+    end
+    unless @format.empty?
+      ret['format'] = @format.map{ |f| f.to_h }
+    end
+    unless @inputBinding.nil?
+      ret['inputBinding'] = @inputBinding.to_h
+    end
+    unless @default.nil?
+      ret['default'] = @default.to_h
+    end
+    unless @type.nil?
+      ret['type'] = @type.to_h
+    end
+    ret
+  end
+end
+
+class ExpressionToolOutputParameter < CWLObject
+  cwl_object_preamble :id, :label, :secondaryFiles, :streamable,
+                      :doc, :format, :type
+
+  def self.satisfies_additional_constraints(obj)
+    obj.instance_of?(Hash) and
+      obj.include?('id')
+  end
+
+  def self.load(obj)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    unless self.class.valid?(obj)
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @id = obj['id']
+    @label = obj.fetch('label', nil)
+    @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
+                        obj.fetch('secondaryFiles', []).map{ |sec|
+                          Expression.load(sec)
+                        }
+                      else
+                        [Expression.load(obj['secondaryFiles'])]
+                      end
+    @streamable = obj.fetch('streamable', false)
+    @doc = if obj.include? 'doc'
+             obj['doc'].instance_of?(Array) ? obj['doc'].join : obj['doc']
+           end
+    @outputBinding = if obj.include? 'outputBinding'
+                       CommandOutputBinding.load(obj['outputBinding'])
+                     end
+    @format = if obj.include? 'format'
+                Expression.load(obj['format'])
+              end
+    @type = if obj.include? 'type'
+              CWLOutputType.load(obj['type'])
+            end
+  end
+
+  def to_h
+    ret = {}
+    ret['id'] = @id
+    unless @label.nil?
+      ret['label'] = @label
+    end
+    unless @secondaryFiles.empty?
+      ret['secondaryFiles'] = @secondaryFiles.map{ |s|
+        s.to_h
+      }
+    end
+    if @streamable
+      ret['streamable'] = @streamable
+    end
+    unless @doc.nil?
+      ret['doc'] = @doc
+    end
+    unless @outputBinding.nil?
+      ret['outputBinding'] = @outputBinding.to_h
+    end
+    unless @format.nil?
+      ret['format'] = @format.to_h
+    end
+    unless @type.nil?
+      ret['type'] = @type
+    end
+    ret
+  end
+end
 
 if $0 == __FILE__
   format = :yaml
