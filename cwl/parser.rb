@@ -25,6 +25,7 @@
 require 'yaml'
 require 'json'
 require 'optparse'
+require_relative 'js-parser'
 
 class CWLParseError < Exception
 end
