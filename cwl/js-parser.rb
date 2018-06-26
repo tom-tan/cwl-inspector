@@ -368,8 +368,8 @@ class ECMAScriptParser < Parslet::Parser
   # }
   rule(:property_assignment) {
     property_name >> spaces? >> str(':') >> spaces? >> assignment_expression |
-      str('get') >> property_name >> spaces? >> str('(') >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}') |
-      str('set') >> property_name >> spaces? >> str('(') >> spaces? >> property_set_parameter_list >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}')
+      str('get') >> spaces >> property_name >> spaces? >> str('(') >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}') |
+      str('set') >> spaces >> property_name >> spaces? >> str('(') >> spaces? >> property_set_parameter_list >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}')
   }
   rule(:property_name) {
     identifier_name |
@@ -388,12 +388,12 @@ class ECMAScriptParser < Parslet::Parser
     #   member_expression >> str('[') >> expression >> str(']') |
     #   member_expression >> str('.') >> identifier_name |
     #   str('new') >> member_expression >> arguments
-    (primary_expression | function_expression | str('new') >> spaces? >> member_expression >> spaces? >> arguments) >>
+    (primary_expression | function_expression | str('new') >> spaces >> member_expression >> spaces? >> arguments) >>
       (spaces? >> str('[') >> spaces? >> expression >> spaces? >> str(']') | spaces? >> str('.') >> spaces? >> identifier_name).repeat
   }
   rule(:new_expression) {
     member_expression |
-      str('new') >> spaces? >> new_expression
+      str('new') >> spaces >> new_expression
   }
   rule(:call_expression) {
     # member_expression >> arguments |
@@ -819,6 +819,6 @@ def test_fn(str)
 end
 
 if $0 == __FILE__
-  # p test_exp(ARGV.empty? ? '$([1,2,3])' : ARGV.first)
-  p test_fn(ARGV.empty? ? '${}' : ARGV.first)
+  p test_exp(ARGV.empty? ? '$([1,2,3])' : ARGV.first)
+  # p test_fn(ARGV.empty? ? '${}' : ARGV.first)
 end
