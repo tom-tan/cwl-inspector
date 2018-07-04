@@ -25,6 +25,7 @@
 require 'yaml'
 require 'json'
 require 'optparse'
+require_relative 'exp-parser'
 require_relative 'js-parser'
 
 class CWLParseError < Exception
@@ -1992,26 +1993,6 @@ EOS
   ret
 end
 
-def parameter_reference_regex
-  symbol = /[a-zA-Z0-9]+/
-  singleq = /\['(?:[^']|\\')*'\]/
-  doubleq = /\["(?:[^"]|\\")*"\]/
-  index = /\[\d+\]/
-  segment = /\.#{symbol}|#{singleq}|#{doubleq}|#{index}/
-  parameter_reference = /\$\((#{symbol}#{segment}*)\)/
-  parameter_reference
-end
-
-def ecmascript_expression_regex
-  # http://www.ecma-international.org/ecma-262/5.1/#sec-11
-  /\$(\(.+\))/
-end
-
-def ecmascript_function_body_regex
-  # http://www.ecma-international.org/ecma-262/5.1/#sec-13
-  /\$({.+})/m
-end
-
 class Expression
   def self.load(obj)
     Expression.new(obj)
@@ -2033,42 +2014,43 @@ class Expression
     expression = @expression.chomp
 
     rx = use_js ? /\$([({])/ : /\$\(/
-    exp_regex = ecmascript_expression_regex
-    fun_regex = ecmascript_function_body_regex
-    ref_regex = parameter_reference_regex
+    exp_parser = ECMAScriptExpressionParser.new
+    fun_parser = ECMAScriptFunctionBodyParser.new
+    ref_parser = ParameterReferenceParser.new
 
     evaled = nil
     while expression.match rx
       kind = $1
-      regex = if use_js
-                case kind
-                when '('
-                  exp_regex
-                when '{'
-                  fun_regex
-                end
+      parser = if use_js
+                 case kind
+                 when '('
+                   exp_parser
+                 when '{'
+                   fun_parser
+                 end
+               else
+                 ref_parser
+               end
+      begin
+        m = parser.parse expression
+        exp = m[:body]
+        pre = m[:pre]
+        post = m[:post]
+        ret = if use_js
+                evaluate_js_expression(exp, inputs, runtime, self_)
               else
-                ref_regex
+                evaluate_parameter_reference(exp, inputs, runtime, self_)
               end
-      m = expression.match regex
-      if m.nil?
+        evaled = if evaled.nil? and pre.empty?
+                   ret
+                 else
+                   "#{evaled}#{pre}#{ret}"
+                 end
+        expression = post
+      rescue Parselet::ParseFailed
         str = use_js ? 'Javascript expression' : 'parameter reference'
         raise CWLInspectionError, "Invalid #{str}: #{expression}"
       end
-      exp = m[1]
-      pre = m.pre_match
-      post = m.post_match
-      ret = if use_js
-              evaluate_js_expression(exp, inputs, runtime, self_)
-            else
-              evaluate_parameter_reference(exp, inputs, runtime, self_)
-            end
-      evaled = if evaled.nil? and pre.empty?
-                 ret
-               else
-                 "#{evaled}#{pre}#{ret}"
-               end
-      expression = post
     end
     if evaled.nil?
       expression
