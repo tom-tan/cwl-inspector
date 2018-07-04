@@ -1,56 +1,44 @@
 #!/usr/bin/env ruby
 # coding: utf-8
 require 'parslet'
+require 'parslet/convenience'
 
+# http://www.ecma-international.org/ecma-262/5.1/#sec-A
 class ECMAScriptParser < Parslet::Parser
-  rule(:space) {
-    white_space | line_terminator | comment
-  }
-  rule(:spaces?) {
-    space.repeat
-  }
-  rule(:spaces) {
-    space.repeat(1)
-  }
-
-  # 6 --
+  # A.1 --
   rule(:source_character) {
     any
   }
-  # -- 6
-
-  # 7 --
   rule(:input_element_div) {
-    white_space |
-      line_terminator |
-      comment |
-      token |
-      div_punctuator
+    white_space | line_terminator | comment | token | div_punctuator
   }
-  # -- 7
-
-  # 7.2 --
+  rule(:input_element_reg_exp) {
+    white_space | line_terminator | comment | token | regular_expression_literal
+  }
   rule(:white_space) {
-    chars = [0x9, 0xb, 0xc, 0x20, 0xa0, 0xffff].map{ |n| n.chr('UTF-8') }
-    match('['+chars.join+']|\p{Space_Separator}')
+    tab = 0x9.chr('UTF-8')
+    vt = 0xb.chr('UTF-8')
+    ff = 0xc.chr('UTF-8')
+    sp = 0x20.chr('UTF-8')
+    nbsp = 0xa0.chr('UTF-8')
+    bom = 0xfeff.chr('UTF-8')
+    usp = /\p{Space_Separator}/
+    str(tab) | str(vt) | str(ff) | str(sp) | str(nbsp) | str(bom) | match(usp)
   }
-  # -- 7.2
-
-  # 7.3 --
   rule(:line_terminator) {
-    chars = [0xa, 0xd, 0x2028, 0x2029].map{ |n| n.chr('UTF-8') }
-    match('"'+chars.join+'"')
+    lf = 0xa.chr('UTF-8')
+    cr = 0xd.chr('UTF-8')
+    ls = 0x2028.chr('UTF-8')
+    ps = 0x2029.chr('UTF-8')
+    str(lf) | str(cr) | str(ls) | str(ps)
   }
   rule(:line_terminator_sequence) {
-    str(0x9.chr('UTF-8')) |
-      str(0xd.chr('UTF-8')) >> str(0xa.chr('UTF-8')).absent? |
-      str(0x2028.chr('UTF-8')) |
-      str(0x2029.chr('UTF-8')) |
-      str(0xd.chr('UTF-8')) >> str(0xa.chr('UTF-8'))
+    lf = 0xa.chr('UTF-8')
+    cr = 0xd.chr('UTF-8')
+    ls = 0x2028.chr('UTF-8')
+    ps = 0x2029.chr('UTF-8')
+    str(lf) | str(cr) >> str(lf).absent? | str(ls) | str(ps) | str(cr) >> str(lf)
   }
-  # -- 7.3
-
-  # 7.4 --
   rule(:comment) {
     multi_line_comment |
       single_line_comment
@@ -70,7 +58,7 @@ class ECMAScriptParser < Parslet::Parser
     str('*').absent? >> source_character
   }
   rule(:multi_line_not_forward_slash_or_asterisk_char) {
-    match('[/*]').absent? >> source_character
+    (str('/') | str('*')).absent? >> source_character
   }
   rule(:single_line_comment) {
     str('//') >> single_line_comment_chars.maybe
@@ -81,29 +69,35 @@ class ECMAScriptParser < Parslet::Parser
   rule(:single_line_comment_char) {
     line_terminator.absent? >> source_character
   }
-  # -- 7.4
-
-  # 7.5 --
   rule(:token) {
     identifier_name |
       punctuator |
       numeric_literal |
       string_literal
   }
-  # -- 7.5
-
-  # 7.6 --
   rule(:identifier) {
     reserved_word.absent? >> identifier_name
   }
   rule(:identifier_name) {
-    identifier_start >> identifier_part.repeat(1)
+    # identifier_start |
+    #   identifier_name >> identifier_part
+    identifier_start >> identifier_part.repeat
   }
   rule(:identifier_start) {
-    unicode_letter | match('[$_]') | str('\\') >> unicode_escape_sequence
+    unicode_letter |
+      str('$') |
+      str('_') |
+      str("\'") >> unicode_escape_sequence
   }
   rule(:identifier_part) {
-    identifier_start | unicode_combining_mark | unicode_digit | unicode_connector_punctuation | str(0x200c.chr('UTF-8')) | str(0x200d.chr('UTF-8'))
+    zwnj = 0x200c.chr('UTF-8')
+    zwj = 0x200d.chr('UTF-8')
+    identifier_start |
+      unicode_combining_mark |
+      unicode_digit |
+      unicode_connector_punctuation |
+      str(zwnj) |
+      str(zwj)
   }
   rule(:unicode_letter) {
     cats = [/\p{Uppercase_Letter}/, /\p{Lowercase_Letter}/,
@@ -121,15 +115,12 @@ class ECMAScriptParser < Parslet::Parser
   rule(:unicode_connector_punctuation) {
     match('\p{Connector_Punctuation}')
   }
-  # -- 7.6
-
-  # 7.6.1 --
   rule(:reserved_word) {
-    keyword | future_reserved_word | null_literal | boolean_literal
+    keyword |
+      future_reserved_word |
+      null_literal |
+      boolean_literal
   }
-  # -- 7.6.1
-
-  # 7.6.1.1 --
   rule(:keyword) {
     str('break') | str('do') | str('instanceof') | str('typeof') |
       str('case') | str('else') | str('new') | str('var') |
@@ -139,55 +130,44 @@ class ECMAScriptParser < Parslet::Parser
       str('default') | str('if') | str('throw') |
       str('delete') | str('in') | str('try')
   }
-  # -- 7.6.1.1
-
-  # 7.6.1.2 --
   rule(:future_reserved_word) {
     str('class') | str('enum') | str('extends') | str('super') |
       str('const') | str('export') | str('import') |
-      # in strict mode
-      str('implements') | str('let') | str('private') | str('public') | str('yield') |
-      str('interrface') | str('package') | str('protected') | str('static')
+      # when parsing strict mode
+      str('implements') | str('let') | str('private') | str('public') |
+      str('interface') | str('package') | str('protected') | str('static') |
+      str('yield')
   }
-  # -- 7.6.1.2
-
-  # 7.7 --
   rule(:punctuator) {
-    match('[{}()\[\].;,<>+-*%&|^!~?:=]') | str('<=') |
+    str('{') | str('}') | str('(') | str(')') | str('[') | str(']') |
+      str('.') | str(';') | str(',') | str('<') | str('>') | str('<=') |
       str('>=') | str('==') | str('!=') | str('===') | str('!==') |
-      str('++') | str('--') |
-      str('<<') | str('>>') | str('>>>') |
-      str('&&') | str('||') |
-      str('+=') | str('-=') | str('*=') | str('%=') | str('<<=') |
+      str('+') | str('-') | str('*') | str('%') | str('++') | str('--') |
+      str('<<') | str('>>') | str('>>>') | str('&') | str('|') | str('^') |
+      str('!') | str('~') | str('&&') | str('||') | str('?') | str(':') |
+      str('=') | str('+=') | str('-=') | str('*=') | str('%=') | str('<<=') |
       str('>>=') | str('>>>=') | str('&=') | str('|=') | str('^=')
   }
-
   rule(:div_punctuator) {
     str('/') | str('/=')
   }
-  # -- 7.7
-
-  # 7.8 --
   rule(:literal) {
-    null_literal | boolean_literal | numeric_literal | string_literal | regular_expression_literal
+    null_literal |
+      boolean_literal |
+      numeric_literal |
+      string_literal |
+      regular_expression_literal
   }
-  # -- 7.8
-
-  # 7.8.1 --
   rule(:null_literal) {
     str('null')
   }
-  # -- 7.8.1
-
-  # 7.8.2 --
   rule(:boolean_literal) {
-    str('true') | str('false')
+    str('true') |
+      str('false')
   }
-  # -- 7.8.2
-
-  # 7.8.3 --
   rule(:numeric_literal) {
-    decimal_literal | hex_integer_literal
+    decimal_literal |
+      hex_integer_literal
   }
   rule(:decimal_literal) {
     decimal_integer_literal >> str('.') >> decimal_digits.maybe >> exponent_part.maybe |
@@ -199,13 +179,15 @@ class ECMAScriptParser < Parslet::Parser
       non_zero_digit >> decimal_digits.maybe
   }
   rule(:decimal_digits) {
-    decimal_digit.repeat(1)
+    decimal_digit |
+      # decimal_digits >> decimal_digit
+      decimal_digit >> decimal_digits
   }
   rule(:decimal_digit) {
-    match('[0-9]')
+    match(/[0-9]/)
   }
   rule(:non_zero_digit) {
-    match('[1-9]')
+    match(/[1-9]/)
   }
   rule(:exponent_part) {
     exponent_indicator >> signed_integer
@@ -219,15 +201,14 @@ class ECMAScriptParser < Parslet::Parser
       str('-') >> decimal_digits
   }
   rule(:hex_integer_literal) {
-    str('0x') >> hex_digit.repeat(1) |
-      str('0X') >> hex_digit.repeat(1)
+    # str('0x') >> hex_digit |
+    #   str('0X') >> hex_digit |
+    #   hex_integer_literal >> hex_digit
+    (str('0x') | str('0X')) >> hex_digit.repeat(1)
   }
   rule(:hex_digit) {
-    match('[0-9a-fA-F]')
+    match(/[0-9a-fA-F]/)
   }
-  # -- 7.8.3
-
-  # 7.8.4 --
   rule(:string_literal) {
     str('"') >> double_string_characters.maybe >> str('"') |
       str("'") >> single_string_characters.maybe >> str("'")
@@ -239,12 +220,12 @@ class ECMAScriptParser < Parslet::Parser
     single_string_character >> single_string_characters.maybe
   }
   rule(:double_string_character) {
-    (match('["\]') | line_terminator).absent? >> source_character |
+    (str('"') | str('\\') | line_terminator).absent? >> source_character |
       str('\\') >> escape_sequence |
       line_continuation
   }
   rule(:single_string_character) {
-    (match("['\]") | line_terminator).absent? >> source_character |
+    (str("'") | str('\\') | line_terminator).absent? >> source_character |
       str('\\') >> escape_sequence |
       line_continuation
   }
@@ -252,7 +233,7 @@ class ECMAScriptParser < Parslet::Parser
     str('\\') >> line_terminator_sequence
   }
   rule(:escape_sequence) {
-    charactor_escape_sequence |
+    character_escape_sequence |
       str('0') >> decimal_digit.absent? |
       hex_escape_sequence |
       unicode_escape_sequence
@@ -262,7 +243,7 @@ class ECMAScriptParser < Parslet::Parser
       non_escape_character
   }
   rule(:single_escape_character) {
-    match('[\'"\\bfntrtv]')
+    str("'") | str('"') | str('\\') | str('b') | str('f') | str('n') | str('r') | str('t') | str('v')
   }
   rule(:non_escape_character) {
     (escape_character | line_terminator).absent? >> source_character
@@ -270,7 +251,8 @@ class ECMAScriptParser < Parslet::Parser
   rule(:escape_character) {
     single_escape_character |
       decimal_digit |
-      match('[xu]')
+      str('x') |
+      str('u')
   }
   rule(:hex_escape_sequence) {
     str('x') >> hex_digit >> hex_digit
@@ -278,9 +260,6 @@ class ECMAScriptParser < Parslet::Parser
   rule(:unicode_escape_sequence) {
     str('u') >> hex_digit >> hex_digit >> hex_digit >> hex_digit
   }
-  # -- 7.8.4
-
-  # 7.8.5 --
   rule(:regular_expression_literal) {
     str('/') >> regular_expression_body >> str('/') >> regular_expression_flags
   }
@@ -288,16 +267,17 @@ class ECMAScriptParser < Parslet::Parser
     regular_expression_first_char >> regular_expression_chars
   }
   rule(:regular_expression_chars) {
-    str('') |
-      regular_expression_chars >> regular_expression_char
+    # str('') |
+    #   regular_expression_chars >> regular_expression_char
+    regular_expression_char.repeat
   }
   rule(:regular_expression_first_char) {
-    match('[*\/[]').absent? >> regular_expression_non_terminator |
+    (str('*') | str('\\') | str('/') | str('[')).absent? >> regular_expression_non_terminator |
       regular_expression_backslash_sequence |
       regular_expression_class
   }
   rule(:regular_expression_char) {
-    match('[\/[]').absent? >> regular_expression_non_terminator |
+    (str('\\') | str('/') | str('[')).absent? >> regular_expression_non_terminator |
       regular_expression_backslash_sequence |
       regular_expression_class
   }
@@ -311,65 +291,102 @@ class ECMAScriptParser < Parslet::Parser
     str('[') >> regular_expression_class_chars >> str(']')
   }
   rule(:regular_expression_class_chars) {
-    # regular_expression_class_chars >> regular_expression_class_char
-    str('') |
-      regular_expression_class_char.repeat(1)
+    # str('') |
+    #   regular_expression_class_chars >> regular_expression_class_char
+    regular_expression_class_char.repeat
   }
   rule(:regular_expression_class_char) {
-    match('[]\]').absent? >> regular_expression_non_terminator |
+    (str(']') | str('\\')).absent? >> regular_expression_non_terminator |
       regular_expression_backslash_sequence
   }
   rule(:regular_expression_flags) {
-    # regular_expression_flags >> identifier_part
-    str('') |
-      identifier_part.repeat(1)
+    # str('') |
+    #   regular_expression_flags | identifier_part
+    identifier_part.repeat
   }
-  # -- 7.8.5
+  # -- A.1
 
-  # 11.1 --
+  # A.2 --
+  rule(:string_numeric_literal) {
+    str_white_space.maybe |
+      str_white_space.maybe >> str_numeric_literal >> str_white_space.maybe
+  }
+  rule(:str_white_space) {
+    str_white_space_char >> str_white_space.maybe
+  }
+  rule(:str_white_space_char) {
+    white_space |
+      line_terminator
+  }
+  rule(:str_numeric_literal) {
+    str_decimal_literal |
+      hex_integer_literal
+  }
+  rule(:str_decimal_literal) {
+    str_unsigned_decimal_literal |
+      str('+') >> str_unsigned_decimal_literal |
+      str('-') >> str_unsigned_decimal_literal
+  }
+  rule(:str_unsigned_decimal_literal) {
+    infinity |
+      decimal_digits >> str('.') >> decimal_digits.maybe >> exponent_part.maybe |
+      str('.') >> decimal_digits >> exponent_part.maybe |
+      decimal_digits >> exponent_part.maybe
+  }
+  # rule(:decimal_digits) # duplicated
+  # rule(:decimal_digit) # duplicated
+  # rule(:exponent_part) # duplicated
+  # rule(:exponent_indicator) # duplicated
+  # rule(:singned_integer) # duplicated
+  # rule(:hex_integer_literal) # duplicated
+  # rule(:hex_digit) # duplicated
+  # -- A.2
+
+  rule(:space) {
+    white_space | line_terminator | comment
+  }
+
+  # A.3 --
   rule(:primary_expression) {
     str('this') |
       identifier |
       literal |
       array_literal |
       object_literal |
-      str('(') >> spaces? >> expression >> spaces? >> str(')')
+      str('(') >> space.repeat >> expression >> space.repeat >> str(')')
   }
-  # -- 11.1
-
-  # 11.1.4 --
   rule(:array_literal) {
-    # str('[') >> elision.maybe >> str(']') |
-    #   str('[') >> element_list >> str(']') |
-    #   str('[') >> element_list >> str(',') >> elision.maybe >> str(']')
-    str('[') >> (spaces? >> element.maybe >> spaces? >> str(',')).repeat >> spaces? >> str(']') |
-      str('[') >> (spaces? >> element.maybe >> spaces? >> str(',')).repeat >> spaces? >> element >> spaces? >> str(']')
+    str('[') >> space.repeat >> elision.maybe >> space.repeat >> str(']') |
+      str('[') >> space.repeat >> element_list >> space.repeat >> str(']') |
+      str('[') >> space.repeat >> element_list >> space.repeat >> str(',') >> space.repeat >> elision.maybe >> space.repeat >> str(']')
   }
-  rule(:element) {
-    assignment_expression
+  rule(:element_list) {
+    # elision.maybe >> assignment_expression |
+    #   element_list >> str(',') >> elision.maybe >> assignment_expression
+    elision.maybe >> space.repeat >> assignment_expression >> _element_list
   }
-  # rule(:element_list) {
-  #   elision.maybe >> assignment_expression |
-  #     element_list >> str(',') >> elision.maybe >> assignment_expression
-  # }
-  # rule(:elision) {
-  #   str(',')
-  # }
-  # -- 11.1.4
-
-  # 11.1.5 --
+  rule(:_element_list) {
+    (str(',') >> space.repeat >> elision.maybe >> space.repeat >> assignment_expression >> space.repeat >> _element_list).maybe
+  }
+  rule(:elision) {
+    # str(',') |
+    #   elision >> str(',')
+    (str(',') >> space.repeat).repeat(1)
+  }
   rule(:object_literal) {
-    str('{') >> (spaces? >> property_assignment >> spaces? >> str(',')).repeat >> spaces? >> str('}') |
-      str('{') >> (spaces? >> property_assignment >> spaces? >> str(',')).repeat >> spaces? >> property_assignment >> spaces? >> str('}')
+    str('{') >> space.repeat >> str('}') |
+      str('{') >> space.repeat >> property_name_and_value_list >> space.repeat >> str('}') |
+      str('{') >> space.repeat >> property_name_and_value_list >> space.repeat >> str(',') >> space.repeat >> str('}')
   }
-  # rule(:property_name_and_value_list) {
-  #   property_assignment |
-  #     property_name_and_value_list >> str(',') >> property_assignment
-  # }
+  rule(:property_name_and_value_list) {
+    property_assignment |
+      # property_name_and_value_list >> str(',') >> property_assignment
+      property_assignment >> space.repeat >> str(',') >> space.repeat >> property_name_and_value_list
+  }
   rule(:property_assignment) {
-    property_name >> spaces? >> str(':') >> spaces? >> assignment_expression |
-      str('get') >> spaces >> property_name >> spaces? >> str('(') >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}') |
-      str('set') >> spaces >> property_name >> spaces? >> str('(') >> spaces? >> property_set_parameter_list >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}')
+    property_name >> space.repeat >> str(':') >> space.repeat >> assignment_expression |
+      str('get') >> space.repeat(1) >> property_name >> space.repeat >> str('(') >> space.repeat >> str(')') >> space.repeat >> str('{') >> space.repeat >> function_body >> space.repeat >> str('}') |
+      str('set') >> space.repeat(1) >> property_name >> space.repeat >> str('(') >> space.repeat >> property_set_parameter_list >> space.repeat >> str(')') >> space.repeat >> str('{') >> space.repeat >> function_body >> space.repeat >> str('}')
   }
   rule(:property_name) {
     identifier_name |
@@ -379,96 +396,97 @@ class ECMAScriptParser < Parslet::Parser
   rule(:property_set_parameter_list) {
     identifier
   }
-  # -- 11.1.5
-
-  # 11.2 -- Left-Hand-Side Expressions
   rule(:member_expression) {
     # primary_expression |
     #   function_expression |
     #   member_expression >> str('[') >> expression >> str(']') |
     #   member_expression >> str('.') >> identifier_name |
     #   str('new') >> member_expression >> arguments
-    (primary_expression | function_expression | str('new') >> spaces >> member_expression >> spaces? >> arguments) >>
-      (spaces? >> str('[') >> spaces? >> expression >> spaces? >> str(']') | spaces? >> str('.') >> spaces? >> identifier_name).repeat
+    (primary_expression |
+     function_expression |
+     str('new') >> space.repeat(1) >> member_expression >> space.repeat >> arguments) >> space.repeat >> _member_expression
+  }
+  rule(:_member_expression) {
+    ((str('[') >> space.repeat >> expression >> space.repeat >> str(']') |
+      str('.') >> space.repeat >> identifier_name) >> space.repeat >> _member_expression).maybe
   }
   rule(:new_expression) {
     member_expression |
-      str('new') >> spaces >> new_expression
+      str('new') >> space.repeat(1) >> new_expression
   }
   rule(:call_expression) {
     # member_expression >> arguments |
     #   call_expression >> arguments |
     #   call_expression >> str('[') >> expression >> str(']') |
     #   call_expression >> str('.') >> identifier_name
-    (member_expression >> spaces? >> arguments) >> (spaces? >> arguments | spaces? >> str('[') >> spaces? >> expression >> spaces? >> str(']') | spaces? >> str('.') >> spaces? >> identifier_name).repeat
+    member_expression >> space.repeat >> arguments >> space.repeat >> _call_expression
+  }
+  rule(:_call_expression) {
+    ((arguments | str('[') >> space.repeat >> expression >> space.repeat >> str(']') | str('.') >> space.repeat >> identifier_name) >> space.repeat >> _call_expression).maybe
   }
   rule(:arguments) {
-    str('(') >> spaces? >> str(')') |
-      str('(') >> (spaces? >> assignment_expression >> spaces? >> str(',')).repeat >> spaces? >> assignment_expression >> spaces? >> str(')')
+    str('(') >> space.repeat >> str(')') |
+      str('(') >> space.repeat >> argument_list >> space.repeat >> str(')')
   }
-  # rule(:argument_list) {
-  #   assignment_expression |
-  #     argument_list >> str(',') >> assignment_expression
-  # }
+  rule(:argument_list) {
+    # assignment_expression |
+    #   argument_list >> str(',') >> assignment_expression
+    assignment_expression >> space.repeat >> str(',') >> space.repeat >> argument_list |
+      assignment_expression
+  }
   rule(:left_hand_side_expression) {
-    new_expression |
-      call_expression
+    # new_expression |
+    #   call_expression
+    call_expression |
+      new_expression
   }
-  # -- 11.2
-
-  # 11.3 --
   rule(:postfix_expression) {
-    left_hand_side_expression |
-      left_hand_side_expression >> str('++') | # [no LineTerminator here] between lhse and ++
-      left_hand_side_expression >> str('--')
-  }
-  # -- 11.3
+    # left_hand_side_expression |
+    left_hand_side_expression >> (line_terminator.absent? >> space).repeat >> str('++') |
+      left_hand_side_expression >> (line_terminator.absent? >> space).repeat >> str('--') |
+      left_hand_side_expression
 
-  # 11.4 --
+  }
   rule(:unary_expression) {
     postfix_expression |
-      str('delete') >> spaces? >> unary_expression |
-      str('void') >> spaces? >> unary_expression |
-      str('typeof') >> spaces? >> unary_expression |
-      str('++') >> spaces? >> unary_expression |
-      str('--') >> spaces? >> unary_expression |
-      str('+') >> spaces? >> unary_expression |
-      str('-') >> spaces? >> unary_expression |
-      str('~') >> spaces? >> unary_expression |
-      str('!') >> spaces? >> unary_expression
+      str('delete') >> space.repeat(1) >> unary_expression |
+      str('void') >> space.repeat(1) >> unary_expression |
+      str('typeof') >> space.repeat(1) >> unary_expression |
+      str('++') >> space.repeat >> unary_expression |
+      str('--') >> space.repeat >> unary_expression |
+      str('+') >> space.repeat >> unary_expression |
+      str('-') >> space.repeat >> unary_expression |
+      str('~') >> space.repeat >> unary_expression |
+      str('!') >> space.repeat >> unary_expression
   }
-  # -- 11.4
-
-  # 11.5 --
   rule(:multiplicative_expression) {
     # unary_expression |
     #   multiplicative_expression >> str('*') >> unary_expression |
     #   multiplicative_expression >> str('/') >> unary_expression |
     #   multiplicative_expression >> str('%') >> unary_expression
-    (unary_expression >> spaces? >> (str('*') | str('/') | str('%')) >> spaces?).repeat >> unary_expression
+    unary_expression >> space.repeat >> str('*') >> space.repeat >> multiplicative_expression |
+      unary_expression >> space.repeat >> str('/') >> space.repeat >> multiplicative_expression |
+      unary_expression >> space.repeat >> str('%') >> space.repeat >> multiplicative_expression |
+      unary_expression
   }
-  # -- 11.5
-
-  # 11.6 --
   rule(:additive_expression) {
     # multiplicative_expression |
     #   additive_expression >> str('+') >> multiplicative_expression |
     #   additive_expression >> str('-') >> multiplicative_expression
-    (multiplicative_expression >> spaces? >> (str('+') | str('-')) >> spaces?).repeat >> multiplicative_expression
+    multiplicative_expression >> space.repeat >> str('+') >> space.repeat >> additive_expression |
+      multiplicative_expression >> space.repeat >> str('-') >> space.repeat >> additive_expression |
+      multiplicative_expression
   }
-  # -- 11.6
-
-  # 11.7 --
   rule(:shift_expression) {
     # additive_expression |
     #   shift_expression >> str('<<') >> additive_expression |
     #   shift_expression >> str('>>') >> additive_expression |
     #   shift_expression >> str('>>>') >> additive_expression
-    (additive_expression >> spaces? >> (str('<<') | str('>>') | str('>>>')) >> spaces?).repeat >> additive_expression
+    additive_expression >> space.repeat >> str('<<') >> space.repeat >> shift_expression |
+      additive_expression >> space.repeat >> str('>>') >> space.repeat >> shift_expression |
+      additive_expression >> space.repeat >> str('>>>') >> space.repeat >> shift_expression |
+      additive_expression
   }
-  # -- 11.7
-
-  # 11.8 --
   rule(:relational_expression) {
     # shift_expression |
     #   relational_expression >> str('<') >> shift_expression |
@@ -477,7 +495,13 @@ class ECMAScriptParser < Parslet::Parser
     #   relational_expression >> str('>=') >> shift_expression |
     #   relational_expression >> str('instanceof') >> shift_expression |
     #   relational_expression >> str('in') >> shift_expression
-    (shift_expression >> spaces? >> (str('<') | str('>') | str('<=') | str('>=') | str('instanceof') | str('in')) >> spaces?).repeat >> shift_expression
+    shift_expression >> space.repeat >> str('<') >> space.repeat >> relational_expression |
+      shift_expression >> space.repeat >> str('>') >> space.repeat >> relational_expression |
+      shift_expression >> space.repeat >> str('<=') >> space.repeat >> relational_expression |
+      shift_expression >> space.repeat >> str('>=') >> space.repeat >> relational_expression |
+      shift_expression >> space.repeat(1) >> str('instanceof') >> space.repeat(1) >> relational_expression |
+      shift_expression >> space.repeat(1) >> str('in') >> space.repeat(1) >> relational_expression |
+      shift_expression
   }
   rule(:relational_expression_no_in) {
     # shift_expression |
@@ -485,128 +509,139 @@ class ECMAScriptParser < Parslet::Parser
     #   relational_expression_no_in >> str('>') >> shift_expression |
     #   relational_expression_no_in >> str('<=') >> shift_expression |
     #   relational_expression_no_in >> str('>=') >> shift_expression |
-    #   relational_expression_no_in >> str('instanceof') >> shift_expression
-    (shift_expression >> spaces? >> (str('<') | str('>') | str('<=') | str('>=') | str('instanceof')) >> spaces?).repeat >> shift_expression
+    #   relational_expression_no_in >> str('instanceof') >> shift_expression |
+    #   relational_expression_no_in >> str('in') >> shift_expression
+    shift_expression >> space.repeat >> str('<') >> space.repeat >> relational_expression_no_in |
+      shift_expression >> space.repeat >> str('>') >> space.repeat >> relational_expression_no_in |
+      shift_expression >> space.repeat >> str('<=') >> space.repeat >> relational_expression_no_in |
+      shift_expression >> space.repeat >> str('>=') >> space.repeat >> relational_expression_no_in |
+      shift_expression >> space.repeat(1) >> str('instanceof') >> space.repeat(1) >> relational_expression_no_in |
+      shift_expression
   }
-  # -- 11.8
-
-  # 11.9 --
   rule(:equality_expression) {
     # relational_expression |
     #   equality_expression >> str('==') >> relational_expression |
     #   equality_expression >> str('!=') >> relational_expression |
     #   equality_expression >> str('===') >> relational_expression |
     #   equality_expression >> str('!==') >> relational_expression
-    (relational_expression >> spaces? >> (str('==') | str('!=') | str('===') | str('!==')) >> spaces?).repeat >> relational_expression
+    relational_expression >> space.repeat >> str('==') >> space.repeat >> equality_expression |
+      relational_expression >> space.repeat >> str('!=') >> space.repeat >> equality_expression |
+      relational_expression >> space.repeat >> str('===') >> space.repeat >> equality_expression |
+      relational_expression >> space.repeat >> str('!==') >> space.repeat >> equality_expression |
+      relational_expression
   }
   rule(:equality_expression_no_in) {
-    # relational_expression_no_in |
-    #   equality_expression_no_in >> str('==') >> relational_expression_no_in |
-    #   equality_expression_no_in >> str('!=') >> relational_expression_no_in |
-    #   equality_expression_no_in >> str('===') >> relational_expression_no_in |
-    #   equality_expression_no_in >> str('!==') >> relational_expression_no_in
-    (relational_expression_no_in >> spaces? >> (str('==') | str('!=') | str('===') | str('!==')) >> spaces?).repeat >> relational_expression_no_in
+    # relational_expression |
+    #   equality_expression_no_in >> str('==') >> relational_expression |
+    #   equality_expression_no_in >> str('!=') >> relational_expression |
+    #   equality_expression_no_in >> str('===') >> relational_expression |
+    #   equality_expression_no_in >> str('!==') >> relational_expression
+    relational_expression >> space.repeat >> str('==') >> space.repeat >> equality_expression_no_in |
+      relational_expression >> space.repeat >> str('!=') >> space.repeat >> equality_expression_no_in |
+      relational_expression >> space.repeat >> str('===') >> space.repeat >> equality_expression_no_in |
+      relational_expression >> space.repeat >> str('!==') >> space.repeat >> equality_expression_no_in |
+      relational_expression
   }
-  # -- 11.9
-
-  # 11.10 --
   rule(:bitwise_and_expression) {
     # equality_expression |
     #   bitwise_and_expression >> str('&') >> equality_expression
-    (equality_expression >> spaces? >> str('&') >> spaces?).repeat >> equality_expression
+    equality_expression >> space.repeat >> str('&') >> space.repeat >> bitwise_and_expression |
+      equality_expression
   }
   rule(:bitwise_and_expression_no_in) {
     # equality_expression_no_in |
     #   bitwise_and_expression_no_in >> str('&') >> equality_expression_no_in
-    (equality_expression_no_in >> spaces? >> str('&') >> spaces?).repeat >> equality_expression_no_in
+    equality_expression_no_in >> space.repeat >> str('&') >> space.repeat >> bitwise_and_expression_no_in |
+      equality_expression_no_in
   }
   rule(:bitwise_xor_expression) {
     # bitwise_and_expression |
     #   bitwise_xor_expression >> str('^') >> bitwise_and_expression
-    (bitwise_and_expression >> spaces? >> str('^') >> spaces?).repeat >> bitwise_and_expression
+    bitwise_and_expression >> space.repeat >> str('^') >> space.repeat >> bitwise_xor_expression |
+      bitwise_and_expression
   }
   rule(:bitwise_xor_expression_no_in) {
     # bitwise_and_expression_no_in |
     #   bitwise_xor_expression_no_in >> str('^') >> bitwise_and_expression_no_in
-    (bitwise_and_expression_no_in >> spaces? >> str('^') >> spaces?).repeat >> bitwise_and_expression_no_in
+    bitwise_and_expression_no_in >> space.repeat >> str('^') >> space.repeat >> bitwise_xor_expression_no_in |
+      bitwise_and_expression_no_in
   }
   rule(:bitwise_or_expression) {
     # bitwise_xor_expression |
     #   bitwise_or_expression >> str('|') >> bitwise_xor_expression
-    (bitwise_xor_expression >> spaces? >> str('|') >> spaces?).repeat >> bitwise_xor_expression
+    bitwise_xor_expression >> space.repeat >> str('|') >> space.repeat >> bitwise_or_expression |
+      bitwise_xor_expression
   }
   rule(:bitwise_or_expression_no_in) {
     # bitwise_xor_expression_no_in |
     #   bitwise_or_expression_no_in >> str('|') >> bitwise_xor_expression_no_in
-    (bitwise_xor_expression_no_in >> spaces? >> str('|') >> spaces?).repeat >> bitwise_xor_expression_no_in
+    bitwise_xor_expression_no_in >> space.repeat >> str('|') >> space.repeat >> bitwise_or_expression_no_in |
+      bitwise_xor_expression_no_in
   }
-  # -- 11.10
-
-  # 11.11 --
   rule(:logical_and_expression) {
     # bitwise_or_expression |
     #   logical_and_expression >> str('&&') >> bitwise_or_expression
-    (bitwise_or_expression >> spaces? >> str('&&') >> spaces?).repeat >> bitwise_or_expression
+    bitwise_or_expression >> space.repeat >> str('&&') >> space.repeat >> logical_and_expression |
+      bitwise_or_expression
   }
   rule(:logical_and_expression_no_in) {
     # bitwise_or_expression_no_in |
     #   logical_and_expression_no_in >> str('&&') >> bitwise_or_expression_no_in
-    (bitwise_or_expression_no_in >> spaces? >> str('&&') >> spaces?).repeat >> bitwise_or_expression_no_in
+    bitwise_or_expression_no_in >> space.repeat >> str('&&') >> space.repeat >> logical_and_expression_no_in |
+      bitwise_or_expression_no_in
   }
   rule(:logical_or_expression) {
     # logical_and_expression |
     #   logical_or_expression >> str('||') >> logical_and_expression
-    (logical_and_expression >> spaces? >> str('||') >> spaces?).repeat >> logical_and_expression
+    logical_and_expression >> space.repeat >> str('||') >> space.repeat >> logical_or_expression |
+      logical_and_expression
   }
   rule(:logical_or_expression_no_in) {
     # logical_and_expression_no_in |
-    #   logical_or_expression_no_in >> str('||') > logical_and_expression_no_in
-    (logical_and_expression_no_in >> spaces? >> str('||') >> spaces?).repeat >> logical_and_expression_no_in
+    #   logical_or_expression_no_in >> str('||') >> logical_and_expression_no_in
+    logical_and_expression_no_in >> space.repeat >> str('||') >> space.repeat >> logical_or_expression_no_in |
+      logical_and_expression_no_in
   }
-  # -- 11.11
-
-  # 11.12 --
   rule(:conditional_expression) {
-    logical_or_expression |
-      logical_or_expression >> spaces? >> str('?') >> spaces? >> assignment_expression >> spaces? >> str(':') >> spaces? >> assignment_expression
+    # logical_or_expression |
+    #   logical_or_expression >> str('?') >> assignment_expression >> str(':') >> assignment_expression
+    logical_or_expression >> space.repeat >> str('?') >> space.repeat >> assignment_expression >> space.repeat >> str(':') >> space.repeat >> assignment_expression |
+          logical_or_expression
   }
   rule(:conditional_expression_no_in) {
-    logical_or_expression_no_in |
-      logical_or_expression_no_in >> spaces? >> str('?') >> spaces? >> assignment_expression >> spaces? >> str(':') >> spaces? >> assignment_expression_no_in
+    # logical_or_expression_no_in |
+    #   logical_or_expression_no_in >> str('?') >> assignment_expression >> str(':') >> assignment_expression_no_in
+    logical_or_expression_no_in >> space.repeat >> str('?') >> space.repeat >> assignment_expression >> space.repeat >> str(':') >> space.repeat >> assignment_expression_no_in |
+      logical_or_expression_no_in
   }
-  # -- 11.12
-
-  # 11.13 --
   rule(:assignment_expression) {
     conditional_expression |
-      left_hand_side_expression >> spaces? >> str('=') >> spaces? >> assignment_expression |
-      left_hand_side_expression >> spaces? >> assignment_operator >> spaces? >> assignment_expression
+      left_hand_side_expression >> space.repeat >> str('=') >> space.repeat >> assignment_expression |
+      left_hand_side_expression >> space.repeat >> assignment_operator >> space.repeat >> assignment_expression
   }
   rule(:assignment_expression_no_in) {
     conditional_expression_no_in |
-      left_hand_side_expression >> spaces? >> str('=') >> spaces? >> assignment_expression_no_in |
-      left_hand_side_expression >> spaces? >> assignment_operator >> spaces? >> assignment_expression_no_in
+      left_hand_side_expression >> space.repeat >> str('=') >> space.repeat >> assignment_expression_no_in |
+      left_hand_side_expression >> space.repeat >> assignment_operator >> space.repeat >> assignment_expression_no_in
   }
   rule(:assignment_operator) {
-    str('*=') | str('/=') | str('%=') | str('+=') | str('-=') |
-      str('<<=') | str('>>=') | str('>>>=') | str('&=') | str('^=') | str('|=')
+    str('*=') | str('/=') | str('%=') | str('+=') | str('-=') | str('<<=') | str('>>=') | str('>>>=') | str('&=') | str('^=') | str('|=')
   }
-  # -- 11.13
-
-  # 11.14 --
   rule(:expression) {
     # assignment_expression |
     #   expression >> str(',') >> assignment_expression
-    (assignment_expression >> spaces? >> str(',') >> spaces?).repeat >> assignment_expression
+    assignment_expression >> space.repeat >> str(',') >> space.repeat >> expression |
+      assignment_expression
   }
   rule(:expression_no_in) {
     # assignment_expression_no_in |
-    #   expression_no_in >> str(',') >> assignment_expression_no_in
-    (assignment_expression_no_in >> spaces? >> str(',') >> spaces?).repeat >> assignment_expression_no_in
+    #   expression_no_in >> str(',') >> assignment_expression
+    assignment_expression_no_in >> space.repeat >> str(',') >> space.repeat >> expression_no_in |
+      assignment_expression_no_in
   }
-  # -- 11.14
+  # -- A.3
 
-  # 12 --
+  # A.4 --
   rule(:statement) {
     block |
       variable_statement |
@@ -624,181 +659,152 @@ class ECMAScriptParser < Parslet::Parser
       try_statement |
       debugger_statement
   }
-  # -- 12
-
-  # 12.1 --
   rule(:block) {
-    str('{') >> spaces? >> statement_list.maybe >> spaces? >> str('}')
+    str('{') >> space.repeat >> statement_list.maybe >> space.repeat >> str('}')
   }
   rule(:statement_list) {
-    (statement >> spaces?).repeat(1)
+    # statement |
+    #   statement_list | statement
+    statement >> space.repeat >> statement_list |
+      statement
   }
-  # -- 12.1
-
-  # 12.2 --
   rule(:variable_statement) {
-    str('var') >> spaces? >> variable_declaration_list >> spaces? >> str(';')
+    str('var') >> space.repeat(1) >> variable_declaration_list >> space.repeat >> str(';')
   }
   rule(:variable_declaration_list) {
-    (variable_declaration >> spaces? >> str(',')).repeat >> spaces? >> variable_declaration
+    # variable_declaration |
+    #   variable_declaration_list >> str(',') >> variable_declaration
+    variable_declaration >> space.repeat >> str(',') >> space.repeat >> variable_declaration_list |
+      variable_declaration
   }
   rule(:variable_declaration_list_no_in) {
-    (variable_declaration_no_in >> spaces? >> str(',')).repeat >> spaces? >> variable_declaration_no_in
+    # variable_declaration_no_in |
+    #   variable_declaration_list_no_in >> str(',') >> variable_declaration_no_in
+    variable_declaration_no_in >> space.repeat >> str(',') >> space.repeat >> variable_declaration_list_no_in |
+      variable_declaration_no_in
   }
   rule(:variable_declaration) {
-    identifier >> spaces? >> initialiser.maybe
+    identifier >> space.repeat(1) >> initialiser.maybe
   }
   rule(:variable_declaration_no_in) {
-    identifier >> spaces? >> initialiser_no_in.maybe
+    identifier >> space.repeat(1) >> initialiser_no_in.maybe
   }
   rule(:initialiser) {
-    str('=') >> spaces? >> assignment_expression
+    str('=') >> space.repeat >> assignment_expression
   }
   rule(:initialiser_no_in) {
-    str('=') >> spaces? >> assignment_expression_no_in
+    str('=') >> space.repeat >> assignment_expression_no_in
   }
-  # -- 12.2
-
-  # 12.3 --
   rule(:empty_statement) {
     str(';')
   }
-  # -- 12.3
-
-  # 12.4 --
   rule(:expression_statement) {
-    (str(',') | str('function')).absent? >> spaces? >> expression >> spaces? >> str(';')
+    (str(',') | str('function')).absent? >> expression >> space.repeat >> str(';')
   }
-  # -- 12.4
-
-  # 12.5 --
   rule(:if_statement) {
-    str('if') >> spaces? >> str('(') >> spaces? >> expression >> spaces? >> str(')') >> spaces? >>
-      statement >> (spaces? >> str('else') >> spaces? >> statement).maybe
+    str('if') >> space.repeat >> str('(') >> space.repeat >> expression >> space.repeat >> str(')') >> space.repeat >> statement >> space.repeat >> str('else') >> space.repeat >> statement |
+      str('if') >> space.repeat >> str('(') >> space.repeat >> expression >> space.repeat >> str(')') >> space.repeat >> statement
   }
-  # -- 12.5
-
-  # 12.6 --
   rule(:iteration_statement) {
-    str('do') >> spaces? >> statement >> spaces? >> str('while') >> spaces? >> str('(') >> spaces? >> expression >> spaces? >> str(')') >> spaces? >> str(';') |
-      str('while') >> spaces? >> str('(') >> spaces? >> expression >> spaces? >> str(')') >> spaces >> statement |
-      str('for') >> spaces? >> str('(') >> spaces? >> expression_no_in.maybe >> spaces? >> str(';') >> spaces? >> expression.maybe >> spaces? >> str(';') >> spaces? >> expression.maybe >> spaces? >> str(')') >> spaces? >> statement |
-      str('for') >> spaces? >> str('(') >> spaces? >> str('var') >> spaces >> variable_declaration_list_no_in >> spaces? >> str(';') >> spaces? >> expression.maybe >> spaces? >> str(';') >> spaces? >> expression.maybe >> spaces? >> str(')') >> spaces? >> statement |
-      str('for') >> spaces? >> str('(') >> spaces? >> left_hand_side_expression >> spaces >> str('in') >> spaces >> expression >> spaces? >> str(')') >> spaces? >> statement |
-      str('for') >> spaces? >> str('(') >> spaces? >> str('var') >> spaces >> variable_declaration_no_in >> spaces >> str('in') >> spaces >> expression >> spaces? >> str(')') >> spaces? >> statement
+    str('do') >> space.repeat >> statement >> space.repeat >> str('while') >> space.repeat >> str('(') >> space.repeat >> expression >> space.repeat >> str(')') >> space.repeat >> str(';') |
+      str('while') >> space.repeat >> str('(') >> space.repeat >> expression >> space.repeat >> str(')') >> space.repeat >> statement |
+      str('for') >> space.repeat >> str('(') >> space.repeat >> expression_no_in.maybe >> space.repeat >> str(';') >> space.repeat >> expression.maybe >> space.repeat >> str(';') >> space.repeat >> expression.maybe >> space.repeat >> str(';') >> space.repeat >> statement |
+      str('for') >> space.repeat >> str('(') >> space.repeat >> str('var') >> space.repeat(1) >> variable_declaration_no_in >> space.repeat >> str(';') >> space.repeat >> expression.maybe >> space.repeat >> str(';') >> space.repeat >> expression.maybe >> space.repeat >> str(')') >> space.repeat >> statement |
+      str('for') >> space.repeat >> str('(') >> space.repeat >> left_hand_side_expression >> space.repeat(1) >> str('in') >> space.repeat(1) >> expression >> space.repeat >> str(')') >> space.repeat >> statement |
+      str('for') >> space.repeat >> str('(') >> space.repeat >> str('var') >> space.repeat(1) >> variable_declaration_no_in >> space.repeat(1) >> str('in') >> space.repeat(1) >> expression >> space.repeat >> str(')') >> space.repeat >> statement
   }
-  # -- 12.6
-
-  # 12.7 --
   rule(:continue_statement) {
-    str('continue') >> spaces? >> str(';') |
-      str('continue') >> spaces >> identifier >> spaces? >> str(';') # continue [no LineTerminator here] Identifier ;
+    str('continue') >> space.repeat >> str(';') |
+      str('continue') >> (line_terminator.absent? >> space).repeat(1) >> identifier >> space.repeat >> str(';')
   }
-  # -- 12.7
-
-  # 12.8 --
   rule(:break_statement) {
-    str('break') >> spaces? >> str(';') |
-      str('break') >> spaces >> identifier >> spaces? >> str(';') # break [no LineTerminator here] Identifier ;
+    str('break') >> space.repeat >> str(';') |
+      str('break') >> (line_terminator.absent? >> space).repeat(1) >> identifier >> space.repeat >> str(';')
   }
-  # -- 12.8
-
-  # 12.9 --
   rule(:return_statement) {
-    str('return') >> spaces? >> str(';') |
-      str('return') >> spaces >> expression >> spaces? >> str(';') # return [no LineTerminator here] Expression ;
+    str('return') >> space.repeat >> str(';') |
+      str('return') >> (line_terminator.absent? >> space).repeat(1) >> expression >> space.repeat >> str(';')
   }
-  # -- 12.9
-
-  # 12.10 --
   rule(:with_statement) {
-    str('with') >> spaces? >> str('(') >> spaces? >> expression >> spaces? >> str(')') >> spaces? >> statement
+    str('with') >> space.repeat >> str('(') >> space.repeat >> expression >> space.repeat >> str(')') >> space.repeat >> statement
   }
-  # -- 12.10
-
-  # 12.11 --
   rule(:switch_statement) {
-    str('switch') >> spaces? >> str('(') >> spaces? >> expression >> spaces? >> str(')') >> spaces? >> case_block
+    str('switch') >> space.repeat >> str('(') >> space.repeat >> expression >> space.repeat >> str(')') >> space.repeat >> case_block
   }
   rule(:case_block) {
-    str('{') >> spaces? >> case_clouses.maybe >> spaces? >> str('}') |
-    str('{') >> spaces? >> case_clouses.maybe >> spaces? >> default_clause >> spaces? >> case_clauses.maybe >> spaces? >> str('}')
+    str('{') >> space.repeat >> case_clauses.maybe >> space.repeat >> str('}') |
+      str('{') >> space.repeat >> case_clauses.maybe >> space.repeat >> default_clause >> space.repeat >> case_clauses.maybe >> space.repeat >> str('}')
   }
   rule(:case_clauses) {
-    (case_clause >> spaces?).repeat(1)
+    case_clause |
+      # case_clauses >> case_clause
+      case_clause >> space.repeat >> case_clauses
   }
-  rule(:case_clause) {
-    str('case') >> spaces >> expression >> spaces? >> str(':') >> spaces? >> statement_list.maybe
+  rule(:case_clouse) {
+    str('case') >> space.repeat(1) >> expression >> space.repeat >> str(':') >> space.repeat >> statement_list.maybe
   }
   rule(:default_clause) {
-    str('default') >> spaces? >> str(':') >> spaces? >> statement_list.maybe
+    str('default') >> space.repeat >> str(':') >> space.repeat >> statement_list.maybe
   }
-  # -- 12.11
-
-  # 12.12 --
   rule(:labelled_statement) {
-    identifier >> spaces? >> str(':') >> spaces? >> statement
+    identifier >> space.repeat >> str(':') >> space.repeat >> statement
   }
-  #- 12.12
-
-  # 12.13 --
   rule(:throw_statement) {
-    str('throw') >> spaces >> expression >> spaces? >> str(';') # throw [no LineTerminator here] Expression ;
+    str('throw') >> (line_terminator.absent? >> space).repeat >> expression >> space.repeat >> str(';')
   }
-  # -- 12.13
-
-  # 12.14 --
   rule(:try_statement) {
-    str('try') >> spaces? >> block >> spaces? >> catch |
-      str('try') >> spaces? >> block >> spaces? >> finally |
-      str('try') >> spaces? >> block >> spaces? >> catch >> spaces? >> finally
+    str('try') >> space.repeat >> block >> space.repeat >> catch |
+      str('try') >> space.repeat >> block >> space.repeat >> finally |
+      str('try') >> space.repeat >> block >> space.repeat >> catch >> space.repeat >> finally
   }
   rule(:catch) {
-    str('catch') >> spaces? >> str('(') >> spaces? >> identifier >> spaces? >> str(')') >> spaces? >> block
+    str('catch') >> space.repeat >> str('(') >> space.repeat >> identifier >> space.repeat >> str(')') >> space.repeat >> block
   }
   rule(:finally) {
-    str('finally') >> spaces? >> block
+    str('finally') >> space.repeat >> block
   }
-  # -- 12.14
-
-  # 12.15 --
   rule(:debugger_statement) {
-    str('debugger') >> spaces? >> str(';')
+    str('debugger') >> space.repeat  >> str(';')
   }
-  # -- 12.15
+  # -- A.4
 
-  # 13 --
+  # A.5 --
   rule(:function_declaration) {
-    str('function') >> spaces >> identifier >> spaces? >> str('(') >> spaces? >> formal_parameter_list.maybe >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}')
+    str('function') >> space.repeat(1) >> identifier >> space.repeat >> str('(') >> space.repeat >> formal_parameter_list.maybe >> space.repeat >> str(')') >> space.repeat >> str('{') >> space.repeat >> function_body >> space.repeat >> str('}')
   }
   rule(:function_expression) {
-    str('function') >> (spaces >> identifier | spaces?) >> spaces? >> str('(') >> spaces? >> formal_parameter_list.maybe >> spaces? >> str(')') >> spaces? >> str('{') >> spaces? >> function_body >> spaces? >> str('}')
+    str('function') >> (space.repeat(1) >> identifier).maybe >> space.repeat >> str('(') >> space.repeat >> formal_parameter_list.maybe >> space.repeat >> str(')') >> space.repeat >> str('{') >> space.repeat >> function_body >> space.repeat >> str('}')
   }
   rule(:formal_parameter_list) {
     # identifier |
     #   formal_parameter_list >> str(',') >> identifier
-    (identifier >> spaces? >> str(',') >> spaces?).repeat >> identifier
+    identifier >> space.repeat >> str(',') >> space.repeat >> formal_parameter_list |
+      identifier
   }
   rule(:function_body) {
-    spaces? >> source_elements.maybe >> spaces?
+    source_elements.maybe
+  }
+  rule(:program) {
+    source_elements.maybe
   }
   rule(:source_elements) {
     # source_element |
     #   source_elements >> source_element
-    (source_element >> spaces?).repeat(1)
+    source_element >> space.repeat >> source_elements |
+      source_element
   }
   rule(:source_element) {
     statement |
       function_declaration
   }
-  # -- 13
+  # -- A.5
 end
 
 class ECMAScriptExpressionParser < ECMAScriptParser
   root(:cwl_expression)
 
   rule(:cwl_expression) {
-    (str('$(').absent? >> any).repeat.as(:pre) >> str('$(') >> expression.as(:body) >> str(')') >> any.repeat.as(:post)
+    (str('$(').absent? >> any).repeat.as(:pre) >> str('$(') >> space.repeat >> expression.as(:body) >> space.repeat >> str(')') >> any.repeat.as(:post)
   }
 end
 
@@ -806,19 +812,23 @@ class ECMAScriptFunctionBodyParser < ECMAScriptParser
   root(:cwl_function_body)
 
   rule(:cwl_function_body) {
-    (str('${').absent? >> any).repeat.as(:pre) >> str('${') >> function_body.as(:body) >> str('}') >> any.repeat.as(:post)
+    (str('${').absent? >> any).repeat.as(:pre) >> str('${') >> space.repeat >> function_body.as(:body) >> space.repeat >> str('}') >> any.repeat.as(:post)
   }
 end
 
 def test_exp(str)
-  ECMAScriptExpressionParser.new.parse(str)
+  ECMAScriptExpressionParser.new.parse_with_debug(str)
 end
 
 def test_fn(str)
-  ECMAScriptFunctionBodyParser.new.parse(str)
+  ECMAScriptFunctionBodyParser.new.parse_with_debug(str)
 end
 
 if $0 == __FILE__
-  p test_exp(ARGV.empty? ? '$([1,2,3])' : ARGV.first)
-  # p test_fn(ARGV.empty? ? '${}' : ARGV.first)
+  # p test_exp(ARGV.empty? ? '$([1,2,3])' : ARGV.first)
+  # p test_fn(ARGV.empty? ? '${ var r = 24; return r; }' : ARGV.first)
+  ret = test_exp(ARGV.empty? ? '$([1,2,3])' : ARGV.first)
+  p ret[:pre].class
+  p ret[:body].class
+  p ret[:post].class
 end

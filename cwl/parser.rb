@@ -1967,9 +1967,9 @@ def node_bin
   node
 end
 
-def evaluate_js_expression(expression, inputs, runtime, self_)
+def evaluate_js_expression(expression, kind, inputs, runtime, self_)
   node = node_bin
-  exp = expression.start_with?('{') ? "(function() #{expression.gsub(/\n/, '\n')})()" : expression[1..-2]
+  exp = kind == :expression ? expression : "(function() { #{expression.gsub(/\n/, '\n')} })()"
   exp = exp.gsub(/"/, '\"')
   cmdstr = <<-EOS
   'use strict'
@@ -1987,7 +1987,8 @@ EOS
   ret = JSON.load(IO.popen([node, '--eval', cmdstr]) { |io| io.gets })
   if ret.instance_of?(Hash) and
     ret.fetch('class', '') == 'exception'
-    raise CWLInspectionError, "#{ret['message']} in expression '#{expression}'"
+    e = kind == :expression ? "$(#{expression})" : "${#{expression}}"
+    raise CWLInspectionError, "#{ret['message']} in expression '#{e}'"
   end
   # parse object
   ret
@@ -2020,12 +2021,12 @@ class Expression
 
     evaled = nil
     while expression.match rx
-      kind = $1
+      kind = $1 == '(' ? :expression : :body
       parser = if use_js
                  case kind
-                 when '('
+                 when :expression
                    exp_parser
-                 when '{'
+                 when :body
                    fun_parser
                  end
                else
@@ -2033,11 +2034,11 @@ class Expression
                end
       begin
         m = parser.parse expression
-        exp = m[:body]
-        pre = m[:pre]
-        post = m[:post]
+        exp = m[:body].to_s
+        pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
+        post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
         ret = if use_js
-                evaluate_js_expression(exp, inputs, runtime, self_)
+                evaluate_js_expression(exp, kind, inputs, runtime, self_)
               else
                 evaluate_parameter_reference(exp, inputs, runtime, self_)
               end
@@ -2047,7 +2048,7 @@ class Expression
                    "#{evaled}#{pre}#{ret}"
                  end
         expression = post
-      rescue Parselet::ParseFailed
+      rescue Parslet::ParseFailed
         str = use_js ? 'Javascript expression' : 'parameter reference'
         raise CWLInspectionError, "Invalid #{str}: #{expression}"
       end
