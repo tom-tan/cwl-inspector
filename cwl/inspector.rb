@@ -446,7 +446,7 @@ if $0 == __FILE__
           fmt.call walk(file, cmd).to_h
         when /^keys\((\..*)\)$/
           fmt.call keys(file, $1)
-        when /^commandline$/
+        when 'commandline'
           if walk(file, '.class') != 'CommandLineTool'
             raise CWLInspectionError, "#{walk(file, '.class')} is not support `commandline`"
           end
