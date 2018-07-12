@@ -62,11 +62,10 @@ class UninstantiatedVariable
 end
 
 def docker_command(cwl, runtime, inputs)
-  return [[], {}]
   img = if walk(cwl, '.requirements.DockerRequirement', nil)
-          walk(cwl, '.requirements.DockerRequirement', nil)
+          walk(cwl, '.requirements.DockerRequirement.dockerPull', nil)
         elsif walk(cwl, '.hints.DockerRequirement', nil) and system('which docker > /dev/null')
-          walk(cwl, '.hints.DockerRequirement', nil)
+          walk(cwl, '.hints.DockerRequirement.dockerPull', nil)
         else
           nil
         end
@@ -80,24 +79,38 @@ def docker_command(cwl, runtime, inputs)
                raise "Unsupported platform: #{RUBY_PLATFORM}"
              end
     cmd = [
-      'docker', 'run', '-i', '--read-only',
-      '--rm', # to be configurable
+      'docker', 'run', '-i', '--read-only', '--rm',
       "--workdir=#{vardir}/spool/cwl", "--env=HOME=#{vardir}/spool/cwl",
       "--env=TMPDIR=/tmp",
       "--user=#{Process::UID.eid}:#{Process::GID.eid}",
       "-v #{runtime['outdir']}:#{vardir}/spool/cwl",
       "-v #{runtime['tmpdir']}:/tmp",
     ]
-    volume_map = {}
 
-    inputs.keep_if{ |k, v|
-      # どこかに File か Directory があれば
-      v.class_ == 'File' or v.class_ == 'Directory'
-    }
+    replaced_inputs = Hash[
+      walk(cwl, '.inputs', []).map{ |v|
+        case v.type.class
+        when CWLFile, Directory
+          obj = inputs[v.id]
+          container_path = File.join(vardir, 'lib', 'cwl', 'inputs', obj.basename)
+          cmd.push("-v #{obj.location}:#{container_path}:ro")
+          ret = obj.clone
+          ret.location = container_path
+          [v.id, ret.location]
+        when Hash # CommandInputRecordSchema, CommandInputArraySchema, CommandInputUnionSchema
+          raise CWLInspectionError, "Unsupported"
+        else
+          [v.id, inputs[v.id]]
+        end
+      }]
+    cmd.push img
+    [cmd, replaced_inputs]
+  else
+    [[], inputs]
   end
 end
 
-def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
+def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
   valueFrom = walk(binding_, '.valueFrom', nil)
   value = if self_.instance_of? UninstantiatedVariable
             valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
@@ -121,13 +134,6 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
           tmp = pre ? [pre, value.path] : [value.path]
           walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
         # when Directory
-        when CommandInputArraySchema
-          isep = walk(binding_, '.itemSeparator', nil)
-          sep = isep.nil? ? true : walk(binding_, '.separate', true)
-          isep = (isep or ' ')
-
-          tmp = pre ? [pre, value.join(isep)] : [value.join(isep)]
-          sep ? tmp.join(' ') : tmp.join
         when nil
           # Add nothing
         when UninstantiatedVariable
@@ -140,6 +146,22 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
 
           tmp = pre ? [pre, value.join(isep)] : [value.join(isep)]
           sep ? tmp.join(' ') : tmp.join
+        when Hash
+          case type
+          when CommandInputRecordSchema
+            # TODO
+          when CommandInputEnumSchema
+            tmp = pre ? [pre, value] : [value]
+            arg1 = walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+            arg2 = evaluate_input_binding(cwl, nil, type.inputBinding, runtime, inputs, value)
+            [arg1, arg2].join(' ')
+          when CommandInputArraySchema
+            # TODO
+          when CommandInputUnionSchema
+            # TODO
+          else
+            raise CWLInspectionError, "Unsupported type: #{type}"
+          end
         else
           isep = walk(binding_, '.itemSeparator', nil)
           sep = isep.nil? ? true : walk(binding_, '.separate', true)
@@ -160,15 +182,15 @@ def evaluate_input_binding(cwl, binding_, runtime, inputs, self_)
   end
 end
 
-def construct_args(cwl, vol_map, runtime, inputs, self_)
+def construct_args(cwl, runtime, inputs, self_)
   arr = walk(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
     i = walk(body, '.position', 0)
-    [[i, idx], evaluate_input_binding(cwl, body, runtime, inputs, nil)]
+    [[i, idx], evaluate_input_binding(cwl, nil, body, runtime, inputs, nil)]
   }+walk(cwl, '.inputs', []).find_all{ |input|
     walk(input, '.inputBinding', nil)
   }.map{ |input|
     i = walk(input, '.inputBinding.position', 0)
-    [[i, input.id], evaluate_input_binding(cwl, input.inputBinding, runtime, inputs, inputs[input.id])]
+    [[i, input.id], evaluate_input_binding(cwl, input.type, input.inputBinding, runtime, inputs, inputs[input.id])]
   }
 
   arr.sort{ |a, b|
@@ -201,7 +223,7 @@ end
 
 def commandline(file, runtime = {}, inputs = nil, self_ = nil)
   cwl = CommonWorkflowLanguage.load_file(file)
-  docker_cmd, vol_map = container_command(cwl, runtime, inputs, self_, :docker)
+  container_cmd, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
 
   redirect_in = if walk(cwl, '.stdin', nil)
                   fname = cwl.stdin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
@@ -228,16 +250,16 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
                  end
 
   [
-    *docker_cmd,
+    *container_cmd,
     *walk(cwl, '.baseCommand', []),
-    *construct_args(cwl, vol_map, runtime, inputs, self_),
+    *construct_args(cwl, runtime, replaced_inputs, self_),
     *redirect_in,
     *redirect_out,
     *redirect_err,
   ].join(' ')
 end
 
-def eval_runtime
+def eval_runtime(file)
   # TODO
   {
     'coresMin' => 1,
@@ -250,63 +272,137 @@ def eval_runtime
     'outdirMax' => 1024,
     'tmpdir' => '/tmp',
     'outdir' => File.absolute_path(Dir.pwd),
+    'docdir' => [
+      File.dirname(File.expand_path file),
+      '/usr/share/commonwl',
+      '/usr/local/share/commonwl',
+      File.join(ENV.fetch('XDG_DATA_HOME', File.join(ENV['HOME'], '.local', 'share')), 'commonwl'),
+    ]
   }
 end
 
-def parse_inputs(cwl, file)
-  if file.nil?
-    Hash[keys(cwl, '.inputs').map{ |inp|
-           [inp, UninstantiatedVariable.new("$#{inp}")]
+def parse_inputs(cwl, inputs, runtime)
+  input_not_required = walk(cwl, '.inputs', []).all?{ |inp|
+    (inp.type.class == CommandInputUnionSchema and
+      inp.type.types.find_index{ |obj|
+      obj.instance_of?(CWLType) and obj.type == 'null'
+     }) or not inp.default.nil?
+  }
+  if input_not_required or not inputs.nil?
+    Hash[walk(cwl, '.inputs', []).map{ |inp|
+           [inp.id, parse_object(inp.id, inp.type, inputs.nil? ? nil : inputs.fetch(inp.id, nil),
+                                 inp.default, inp.inputBinding.loadContents, runtime)]
          }]
   else
-    unless File.exist? file
-      raise CWLInspectionError, "No such file: #{file}"
-    end
-    format = if file.end_with? '.json'
-               :json
-             elsif file.end_with?('.yml') or file.end_with?('.yaml')
-               :yaml
-             else
-               raise CWLInspectionError, "Unknown file format: #{file}"
-             end
-    inputs = if format == :json
-               open(file) { |f|
-                 JSON.load(f)
-               }
-             else
-               YAML.load_file(file)
-             end
-    inputs.map{ |k, v|
-      parse_object(v)
-    }
+    Hash[keys(cwl, '.inputs', []).map{ |inp|
+           [inp.id, UninstantiatedVariable.new("$#{inp.id}")]
+         }]
   end
 end
 
-def parse_object(obj)
-  case obj
-  when Numeric, String, TrueClass, FalseClass
-    obj
-  when Array
-    obj.map{ |o|
-      parse_object(o)
-    }
-  when Hash
-    case obj.fetch('class', '')
+def parse_object(id, type, obj, default, loadContents, runtime)
+  case type
+  when CWLType
+    case type.type
+    when 'null'
+      unless obj.nil? and default.nil?
+        raise CWLInspectionError, "Invalid null object: #{obj}"
+      end
+      obj
+    when 'boolean'
+      obj = obj.nil? ? default : obj
+      unless obj == true or obj == false
+        raise CWLInspectionError, "Invalid boolean object: #{obj}"
+      end
+      obj
+    when 'int', 'long'
+      obj = obj.nil? ? default : obj
+      unless obj.instance_of? Integer
+        raise CWLInspectionError, "Invalid #{type.type} object: #{obj}"
+      end
+      obj
+    when 'float', 'double'
+      obj = obj.nil? ? default : obj
+      unless obj.instance_of? Float
+        raise CWLInspectionError, "Invalid #{type.type} object: #{obj}"
+      end
+      obj
+    when 'string'
+      obj = obj.nil? ? default : obj
+      unless obj.instance_of? String
+        raise CWLInspectionError, "Invalid string object: #{obj}"
+      end
+      obj
     when 'File'
-      CWLFile.load(obj)
+      obj = obj.nil? ? default : obj
+      if obj.nil?
+        raise CWLInspectionError, "Invalid File object: #{obj}"
+      end
+      file = CWLFile.load(obj)
+      path = file.location.sub %r|^.+//|, ''
+      unless File.exist? path
+        raise CWLInspectionError, "File not found: #{path}"
+      end
+      file.evaluate(runtime, loadContents)
     when 'Directory'
-      Directory.load(obj)
-    else
-      raise CWLInspectionError, "Unsupported class: #{obj.fetch('class', '')}"
+      obj = obj.nil? ? default : obj
+      if obj.nil?
+        raise CWLInspectionError, "Invalid Directory object: #{obj}"
+      end
+      dir = Directory.load(obj)
+      path = dir.location.sub %r|^.+//|, ''
+      unless Dir.exist? path
+        raise CWLInspectionError, "Directory not found: #{path}"
+      end
+      dir.evaluate(runtime, nil)
     end
+  when CommandInputUnionSchema
+    idx = type.types.find_index{ |t|
+      begin
+        parse_object(id, t, obj, default, loadContents, runtime)
+        true
+      rescue CWLInspectionError
+        false
+      end
+    }
+    if idx.nil?
+      raise CWLInspectionError, "Invalid object: #{obj}"
+    end
+    parse_object("#{id}[#{idx}]", type.types[idx], obj, default, loadContents, runtime)
+  when CommandInputRecordSchema
+    raise CWLInspectionError, "Unsupported input type: #{type.class}"
+    # unless obj.instance_of? Hash
+    #   raise CWLInspectionError, "#{input.id} must be a record type of #{input.type.fields.map{ |f| f.type}.join(', ')}"
+    # end
+    # fields = input.fields
+    # Hash[fields.map{ |f|
+    #   unless obj.include? f.name
+    #     raise CWLInspectionError, "#{input.id} must have a record `#{f.name}`"
+    #   end
+    #   [f.name, parse_object("id.#{f.name}", f.type, obj[f.name], nil, loadContents, runtime)]
+    # }]
+  when CommandInputEnumSchema
+    raise CWLInspectionError, "Unsupported input type: #{type.class}"
+    # unless obj.instance_of?(String) and input.symbols.include? obj
+    #   raise CWLInspectionError, "#{input.id} requires must be #{input.symbols.join(', ')}"
+    # end
+    # obj
+  when CommandInputArraySchema
+    t = type.items
+    unless obj.instance_of? Array
+      raise CWLInspectionError, "#{input.id} requires array of #{t} type"
+    end
+    obj.map{ |o|
+      parse_object(id, t, o, nil, loadContents, runtime)
+    }
   else
-    raise CWLInspectionError, "Unsupported object: #{obj}"
+    raise CWLInspectionError, "Unsupported type: #{type.class}"
   end
 end
 
 if $0 == __FILE__
   format = :yaml
-  inputs = nil
+  inp_obj = nil
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} [options] cwl cmd"
   opt.on('-j', '--json', 'Print result in JSON format') {
@@ -316,7 +412,13 @@ if $0 == __FILE__
     format = :yaml
   }
   opt.on('-i=INPUT', 'Job parameter file for `commandline`') { |inp|
-    inputs = YAML.load_file(inp)
+    inp_obj = if inp.end_with? '.json'
+                open(inp) { |f|
+                  JSON.load(f)
+                }
+              else
+                YAML.load_file(inp)
+              end
   }
   opt.parse!(ARGV)
 
@@ -336,10 +438,8 @@ if $0 == __FILE__
           ->(a) { JSON.dump(a) }
         end
 
-  if inputs.nil?
-    inputs = parse_inputs(file, inputs)
-  end
-  runtime = eval_runtime
+  runtime = eval_runtime(file)
+  inputs = parse_inputs(file, inp_obj, runtime)
 
   ret = case cmd
         when /^\..*/

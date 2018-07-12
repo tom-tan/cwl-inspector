@@ -24,7 +24,12 @@
 #
 require 'yaml'
 require 'json'
+require 'fileutils'
 require 'optparse'
+require 'open-uri'
+require 'tmpdir'
+require 'tempfile'
+require 'digest/sha1'
 require_relative 'exp-parser'
 require_relative 'js-parser'
 
@@ -131,6 +136,12 @@ class Array
             end
     self.map{ |e|
       e.instance_variable_get(field)
+    }
+  end
+
+  def to_h
+    self.map{ |e|
+      e.to_h
     }
   end
 end
@@ -437,13 +448,15 @@ class CommandInputParameter < CWLObject
     @inputBinding = if obj.include? 'inputBinding'
                       CommandLineBinding.load(obj['inputBinding'])
                     end
-    @default = if obj.include? 'default'
-                 # type?
-                 raise CWLParseError, "Unsupported `default` in #{self.class}"
-               end
     @type = if obj.include? 'type'
               CWLCommandInputType.load(obj['type'])
             end
+    @default = if obj.include? 'default'
+                 if @type.nil?
+                   raise CWLParseError, 'Unsupported syntax: `default` without `type`'
+                 end
+                 InputParameter.parse_object(@type, obj['default'])
+               end
   end
 
   def to_h
@@ -552,9 +565,9 @@ class CWLInputType
       InputUnionSchema.load([$1, 'null'])
     when /^(.+)\[\]$/
       InputArraySchema.load({
-                                     'type' => 'array',
-                                     'items' => $1,
-                                   })
+                              'type' => 'array',
+                              'items' => $1,
+                            })
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
          'string', 'File', 'Directory'
       CWLType.load(obj)
@@ -705,6 +718,58 @@ class CWLFile < CWLObject
     @contents = nil
   end
 
+  def evaluate(runtime, loadContents = false)
+    file = self.dup
+    location = @location.nil? ? @path : @location
+    if location.nil?
+      if @contents.empty?
+        raise CWLInspectionError, "`path`, `location` or `contents` is necessary for File object: #{self}"
+      end
+      raise CWLInspectionError, "Unsupported"
+      # If the location field is not provided, the contents field must be provided. The implementation must assign a unique identifier for the location field.
+    end
+
+    file.location = case location
+                    when %r|^(.+:)//(.+)$|
+                      scheme, path = $1, $2
+                      case scheme
+                      when 'file:'
+                        unless File.exist? path
+                          raise CWLInspectionError, "File not found: #{location}"
+                        end
+                        path
+                      when 'http:', 'https:', 'ftp:'
+                        raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                      else
+                        raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                      end
+                    else
+                      unless File.exist? location
+                        raise CWLInspectionError, "File not found: file://#{location}"
+                      end
+                      File.join('file://', File.expand_path(location, runtime['docdir'].first))
+                    end
+    file.path = nil
+    uri_path = file.location.sub %r|^(file://)|, ''
+    file.basename = File.basename uri_path
+    file.dirname = File.dirname uri_path
+    file.nameext = File.extname uri_path
+    file.nameroot = File.basename uri_path, file.nameext
+    digest = Digest::SHA1.hexdigest(File.open(uri_path, 'rb').read)
+    file.checksum = "sha1$#{digest}"
+    file.size = File.size(uri_path)
+    file.secondaryFiles = @secondaryFiles.map{ |sf|
+      sf.evaluate(runtime, loadContents)
+    }
+    file.format = @format
+    file.contents = if @contents
+                      @contents
+                    elsif loadContents
+                      File.open(uri_path).read(64*2**10)
+                    end
+    file
+  end
+
   def to_h
     ret = {}
     ret['class'] = @class_
@@ -755,6 +820,42 @@ class Directory < CWLObject
       else
         raise CWLParseError, "Cannot parse as #{self.class}"
       end
+    }
+  end
+
+  def evaluate(runtime, loadContents = false)
+    dir = self.dup
+    location = @location.nil? ? @path : @location
+    if @location.nil?
+      if @listing.empty?
+        raise CWLInspectionError, "`path`, `location` or `listing` fields is necessary for Directory object: #{self}"
+      end
+      raise CWLInspectionError, "Unsupported"
+    end
+
+    dir.location = if location.match %r|^(.+:)//(.+)$|
+                     scheme, path = $1, $2
+                     case scheme
+                     when 'file:'
+                       unless Dir.exist? path
+                         raise CWLInspectionError, "Directory not found: #{location}"
+                       end
+                       location
+                     when 'http:', 'https:', 'ftp:'
+                       raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                     else
+                       raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                     end
+                   else
+                     unless Dir.exist? location
+                       raise CWLInspectionError, "Directory not found: #{location}"
+                     end
+                     File.join('file://', File.expand_path(location, runtime['docdir'].first))
+                   end
+    uri_path = file.location.sub %r|^(file://)|, ''
+    dir.basename = File.basename uri_path
+    dir.listing = @listing.map{ |lst|
+      lst.evaluate(runtime, loadContents)
     }
   end
 
@@ -1948,7 +2049,7 @@ def evaluate_parameter_reference(exp, inputs, runtime, self_)
     # eval
   when /^runtime\.(.+)$/
     attr = $1
-    if runtime.include? attr
+    if runtime.reject{ |k, _| k == 'docdir' }.include? attr
       runtime[attr]
     else
       raise CWLInspectionError, "Unknown parameter reference: #{exp}"
@@ -1976,7 +2077,7 @@ def evaluate_js_expression(expression, kind, inputs, runtime, self_)
   try{
     const exp = "#{exp}";
     process.stdout.write(JSON.stringify(require('vm').runInNewContext(exp, {
-      'runtime': #{JSON.dump(runtime)},
+      'runtime': #{JSON.dump(runtime.reject{ |k, _| k == 'docdir' })},
       'inputs': #{JSON.dump(inputs)},
       'self': #{JSON.dump(self_)}
     })));
@@ -3120,12 +3221,15 @@ class InputParameter < CWLObject
     @inputBinding = if obj.include? 'inputBinding'
                       CommandLineBinding.load(obj['inputBinding'])
                     end
-    @default = if obj.include? 'default'
-                 raise CWLParseError, "Unsupported `default` in #{self.class}"
-               end
     @type = if obj.include? 'type'
               CWLInputType.load(obj['type'])
             end
+    @default = if obj.include? 'default'
+                 if @type.nil?
+                   raise CWLParseError, 'Unsupported format: `default` without `type`'
+                 end
+                 InputParameter.parse_object(@type, obj['default'])
+               end
   end
 
   def to_h
@@ -3230,6 +3334,68 @@ class ExpressionToolOutputParameter < CWLObject
       ret['type'] = @type
     end
     ret
+  end
+end
+
+class InputParameter
+  def self.parse_object(type, obj)
+    case type
+    when CWLType
+      case type.type
+      when 'null'
+        unless obj.nil?
+          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
+        obj
+      when 'boolean'
+        unless obj == true or obj == false
+          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
+        obj
+      when 'int', 'long'
+        unless obj.instance_of? Integer
+          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
+        obj
+      when 'float', 'double'
+        unless obj.instance_of? Float
+          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
+        obj
+      when 'string'
+        unless obj.instance_of? String
+          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
+        obj
+      when 'File'
+        CWLFile.load(obj)
+      when 'Directory'
+        Directory.load(obj)
+      end
+    when CommandInputRecordSchema
+      raise CWLParseError, "Unsupported type: #{type.class}"
+    when CommandInputArraySchema
+      t = type.items
+      unless obj.instance_of? Array
+        raise CWLInspectionError, "Invalid value: array of #{t} is expected"
+      end
+      obj.map{ |o|
+        self.parse_object(t, obj)
+      }
+    when CommandInputUnionSchema
+      idx = type.types.find_index{ |ty|
+        begin
+          self.parse_object(ty, obj)
+          true
+        rescue CWLInspectionError
+          false
+        end
+      }
+      if idx.nil?
+        raise CWLParseError, "Invalid object: #{obj}"
+      end
+      self.parse_object(type.types[idx], obj)
+    end
   end
 end
 
