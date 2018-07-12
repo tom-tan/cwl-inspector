@@ -681,6 +681,9 @@ class CWLFile < CWLObject
   cwl_object_preamble :class_, :location, :path, :basename, :dirname,
                       :nameroot, :nameext, :checksum, :size,
                       :secondaryFiles, :format, :contents
+  attr_writer :location, :path, :basename, :dirname,
+              :nameroot, :nameext, :checksum, :size,
+              :secondaryFiles, :format, :contents
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -729,35 +732,34 @@ class CWLFile < CWLObject
       # If the location field is not provided, the contents field must be provided. The implementation must assign a unique identifier for the location field.
     end
 
-    file.location = case location
-                    when %r|^(.+:)//(.+)$|
-                      scheme, path = $1, $2
-                      case scheme
-                      when 'file:'
-                        unless File.exist? path
-                          raise CWLInspectionError, "File not found: #{location}"
-                        end
-                        path
-                      when 'http:', 'https:', 'ftp:'
-                        raise CWLInspectionError, "Unsupported scheme: #{scheme}"
-                      else
-                        raise CWLInspectionError, "Unsupported scheme: #{scheme}"
-                      end
-                    else
-                      unless File.exist? location
-                        raise CWLInspectionError, "File not found: file://#{location}"
-                      end
-                      File.join('file://', File.expand_path(location, runtime['docdir'].first))
-                    end
-    file.path = nil
-    uri_path = file.location.sub %r|^(file://)|, ''
-    file.basename = File.basename uri_path
-    file.dirname = File.dirname uri_path
-    file.nameext = File.extname uri_path
-    file.nameroot = File.basename uri_path, file.nameext
-    digest = Digest::SHA1.hexdigest(File.open(uri_path, 'rb').read)
+    file.location, file.path = case location
+                               when %r|^(.+:)//(.+)$|
+                                 scheme, path = $1, $2
+                                 case scheme
+                                 when 'file:'
+                                   unless File.exist? path
+                                     raise CWLInspectionError, "File not found: #{location}"
+                                   end
+                                   [location, path]
+                                 when 'http:', 'https:', 'ftp:'
+                                   raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                                 else
+                                   raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                                 end
+                               else
+                                 unless File.exist? location
+                                   raise CWLInspectionError, "File not found: file://#{location}"
+                                 end
+                                 path = File.expand_path(location, runtime['docdir'].first)
+                                 ['file://'+path, path]
+                               end
+    file.basename = File.basename file.path
+    file.dirname = File.dirname file.path
+    file.nameext = File.extname file.path
+    file.nameroot = File.basename file.path, file.nameext
+    digest = Digest::SHA1.hexdigest(File.open(file.path, 'rb').read)
     file.checksum = "sha1$#{digest}"
-    file.size = File.size(uri_path)
+    file.size = File.size(file.path)
     file.secondaryFiles = @secondaryFiles.map{ |sf|
       sf.evaluate(runtime, loadContents)
     }
@@ -765,7 +767,7 @@ class CWLFile < CWLObject
     file.contents = if @contents
                       @contents
                     elsif loadContents
-                      File.open(uri_path).read(64*2**10)
+                      File.open(file.path).read(64*2**10)
                     end
     file
   end
@@ -779,7 +781,8 @@ class CWLFile < CWLObject
     ret['dirname'] = @dirname unless @dirname.nil?
     ret['nameroot'] = @nameroot unless @nameroot.nil?
     ret['nameext'] = @nameext unless @nameext.nil?
-    ret['cehcksum'] = @checksum unless @checksum.nil?
+    ret['checksum'] = @checksum unless @checksum.nil?
+    ret['size'] = @size unless @size.nil?
     unless @secondaryFiles.empty?
       ret['secondaryFiles'] = @secondaryFiles.map{ |f|
         f.to_h
@@ -793,6 +796,7 @@ end
 
 class Directory < CWLObject
   cwl_object_preamble :class_, :location, :path, :basename, :listing
+  attr_writer :location, :path, :basename, :listing
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -833,27 +837,27 @@ class Directory < CWLObject
       raise CWLInspectionError, "Unsupported"
     end
 
-    dir.location = if location.match %r|^(.+:)//(.+)$|
-                     scheme, path = $1, $2
-                     case scheme
-                     when 'file:'
-                       unless Dir.exist? path
-                         raise CWLInspectionError, "Directory not found: #{location}"
-                       end
-                       location
-                     when 'http:', 'https:', 'ftp:'
-                       raise CWLInspectionError, "Unsupported scheme: #{scheme}"
-                     else
-                       raise CWLInspectionError, "Unsupported scheme: #{scheme}"
-                     end
-                   else
-                     unless Dir.exist? location
-                       raise CWLInspectionError, "Directory not found: #{location}"
-                     end
-                     File.join('file://', File.expand_path(location, runtime['docdir'].first))
-                   end
-    uri_path = file.location.sub %r|^(file://)|, ''
-    dir.basename = File.basename uri_path
+    dir.location, dir.path = if location.match %r|^(.+:)//(.+)$|
+                               scheme, path = $1, $2
+                               case scheme
+                               when 'file:'
+                                 unless Dir.exist? path
+                                   raise CWLInspectionError, "Directory not found: #{location}"
+                                 end
+                                 [location, path]
+                               when 'http:', 'https:', 'ftp:'
+                                 raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                               else
+                                 raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                               end
+                             else
+                               unless Dir.exist? location
+                                 raise CWLInspectionError, "Directory not found: #{location}"
+                               end
+                               path = File.expand_path(location, runtime['docdir'].first)
+                               ['file://'+path, path]
+                             end
+    dir.basename = File.basename dir.path
     dir.listing = @listing.map{ |lst|
       lst.evaluate(runtime, loadContents)
     }

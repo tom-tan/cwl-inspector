@@ -400,6 +400,97 @@ def parse_object(id, type, obj, default, loadContents, runtime)
   end
 end
 
+def list(file, runtime, inputs)
+  cwl = CommonWorkflowLanguage.load_file(file)
+  dir = runtime['outdir']
+
+  if File.exist? File.join(dir, 'cwl.output.json')
+    open(File.join(dir, 'cwl.output.json')) { |f|
+      JSON.load(f)
+    }
+  else
+    JSON.dump(Hash[walk(cwl, '.outputs', []).map { |o|
+                     [o.id, list_(cwl, o, runtime, inputs).to_h]
+                   }])
+  end
+end
+
+def list_(cwl, output, runtime, inputs)
+  type = output.type
+  case type
+  when Stdout
+    fname = walk(cwl, '.stdout', Expression.load('$randomized_filename'))
+    evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                            inputs, runtime, nil)
+    dir = runtime['outdir']
+    location = File.absolute_path(File.join(dir, evaled))
+    file = CWLFile.load({
+                          'class' => 'File',
+                          'location' => 'file://'+location,
+                        })
+    File.exist?(location) ? file.evaluate(runtime, false) : file
+  when Stderr
+    fname = walk(cwl, '.stderr', Expression.load('$randomized_filename'))
+    evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                            inputs, runtime, nil)
+    dir = runtime['outdir']
+    location = File.absolute_path(File.join(dir, evaled))
+    file = CWLFile.load({
+                          'class' => 'File',
+                          'location' => 'file://'+location,
+                        })
+    File.exist?(location) ? file.evaluate(runtime, false) : file
+  else
+    obj = walk(cwl, ".outputs.#{output.id}", nil)
+    oBinding = obj.outputBinding
+    if oBinding.nil?
+      raise CWLInspectionError, 'Not yet supported for outputs without outputBinding'
+    end
+    loadContents = oBinding.loadContents
+    dir = runtime['outdir']
+    files = oBinding.glob.map{ |g|
+      pats = g.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                        inputs, runtime, nil)
+      pats = if pats.instance_of? Array
+               pats.join "\0"
+             else
+               pats
+             end
+      Dir.glob(pats, dir).map{ |f|
+        CWLFile.load({
+                       'class' => 'File',
+                       'location' => 'file://'+f,
+                     })
+      }
+    }.flatten.map{ |f|
+      if File.exist? f.sub(%r|^file://|, '')
+        f.evaluate(runtime, loadContents)
+      else
+        f
+      end
+    }
+    evaled = if oBinding.outputEval
+               oBinding.outputEval.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                            inputs, runtime, files.to_h)
+             else
+               files
+             end
+    unless obj.secondaryFiles.empty?
+      raise CWLInspectionError, '`secondaryFiles` is not supported'
+    end
+    if obj.type.instance_of? CWLFile
+      evaled.first.evaluate(runtime, false)
+    elsif obj.type.instance_of?(CommandOutputArraySchema) and
+         obj.type.items == 'File'
+      evaled.map{ |f|
+        f.evaluate(runtime, false)
+      }
+    else
+      evaled
+    end
+  end
+end
+
 if $0 == __FILE__
   format = :yaml
   inp_obj = nil
@@ -448,9 +539,14 @@ if $0 == __FILE__
           fmt.call keys(file, $1)
         when 'commandline'
           if walk(file, '.class') != 'CommandLineTool'
-            raise CWLInspectionError, "#{walk(file, '.class')} is not support `commandline`"
+            raise CWLInspectionError, "`commandline` does not support #{walk(file, '.class')} class"
           end
           commandline(file, runtime, inputs)
+        when 'list'
+          if walk(file, '.class') != 'CommandLineTool'
+            raise CWLInspectionError, "`list` does not support #{walk(file, '.class')} class"
+          end
+          list(file, runtime, inputs)
         else
           raise CWLInspectionError, "Unsupported command: #{cmd}"
         end
