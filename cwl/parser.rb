@@ -67,6 +67,10 @@ class String
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
   end
+
+  def to_h
+    self
+  end
 end
 
 class TrueClass
@@ -2256,9 +2260,20 @@ class Workflow < CWLObject
                  }
                end
     @class_ = obj['class']
-    @steps = obj['steps'].map{ |s|
-      WorkflowStep.load(s)
-    }
+    @steps = if obj['steps'].instance_of? Array
+               obj['steps'].map{ |s|
+                 WorkflowStep.load(s)
+               }
+             else
+               obj['steps'].map{ |k, v|
+                 o = {}
+                 o['id'] = k
+                 v.each{ |f, val|
+                   o[f] = val
+                 }
+                 WorkflowStep.load(o)
+               }
+             end
     @id = obj.fetch('id', nil)
     reqs = if obj.fetch('requirements', []).instance_of? Array
              obj.fetch('requirements', [])
@@ -2781,8 +2796,8 @@ class WorkflowStep < CWLObject
       o.to_h
     }
     ret['run'] = @run.to_h
-    unless @reqirement.empty?
-      ret['reqirements'] = @reqirements.map{ |r|
+    unless @requirements.empty?
+      ret['requirements'] = @requirements.map{ |r|
         r.to_h
       }
     end

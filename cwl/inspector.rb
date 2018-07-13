@@ -373,7 +373,7 @@ def parse_inputs(cwl, inputs, runtime)
     inputs = {}
   end
   if inputs.nil?
-    Hash[keys(cwl, '.inputs', []).map{ |inp|
+    Hash[walk(cwl, '.inputs', []).map{ |inp|
            [inp.id, UninstantiatedVariable.new("$#{inp.id}")]
          }]
   else
