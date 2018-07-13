@@ -48,7 +48,7 @@ end
 def keys(file, path, default=[])
   obj = walk(file, path, nil)
   if obj.instance_of?(Array)
-    obj
+    obj.keys
   else
     obj ? obj.keys : default
   end
@@ -149,7 +149,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
                  unless walk(binding_, '.shellQuote', true)
                    raise CWLInspectionError, "`shellQuote' should be used with `ShellCommandRequirement'"
                  end
-                 false
+                 true
                end
 
   pre = walk(binding_, '.prefix')
@@ -207,7 +207,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
         raise CWLInspectionError, "Unsupported type: #{type}"
       end
     when CommandInputRecordSchema
-      # TODO
+      raise CWLInspectionError, "Unsupported type: #{type}"
     when CommandInputEnumSchema
       tmp = pre ? [pre, value] : [value]
       arg1 = walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
@@ -225,7 +225,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
       tmp = pre ? [pre, vals.join(isep)] : [vals.join(isep)]
       sep ? tmp.join(' ') : tmp.join
     when CommandInputUnionSchema
-      # TODO
+      evaluate_input_binding(cwl, value.type, binding_, runtime, inputs, value.value)
     else
       raise CWLInspectionError, "Unsupported type: #{type}"
     end
@@ -441,7 +441,9 @@ def parse_object(id, type, obj, default, loadContents, runtime)
     if idx.nil?
       raise CWLInspectionError, "Invalid object: #{obj}"
     end
-    parse_object("#{id}[#{idx}]", type.types[idx], obj, default, loadContents, runtime)
+    CWLUnionValue.new(type.types[idx],
+                      parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
+                                   loadContents, runtime))
   when CommandInputRecordSchema
     raise CWLInspectionError, "Unsupported input type: #{type.class}"
     # unless obj.instance_of? Hash

@@ -3397,8 +3397,22 @@ class InputParameter
       if idx.nil?
         raise CWLParseError, "Invalid object: #{obj}"
       end
-      self.parse_object(type.types[idx], obj)
+      CWLUnionValue.new(type.types[idx],
+                        self.parse_object(type.types[idx], obj))
     end
+  end
+end
+
+class CWLUnionValue
+  attr_accessor :type, :value
+
+  def initialize(type, value)
+    @type = type
+    @value = value
+  end
+
+  def to_h
+    @value.to_h
   end
 end
 
