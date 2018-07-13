@@ -306,7 +306,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
     *redirect_in,
     *redirect_out,
     *redirect_err,
-  ].join(' ')
+  ].compact.join(' ')
 end
 
 def eval_runtime(file)
@@ -357,17 +357,20 @@ def parse_inputs(cwl, inputs, runtime)
   input_not_required = walk(cwl, '.inputs', []).all?{ |inp|
     (inp.type.class == CommandInputUnionSchema and
       inp.type.types.find_index{ |obj|
-      obj.instance_of?(CWLType) and obj.type == 'null'
+       obj.instance_of?(CWLType) and obj.type == 'null'
      }) or not inp.default.nil?
   }
-  if input_not_required or not inputs.nil?
+  if inputs.nil? and input_not_required
+    inputs = {}
+  end
+  if inputs.nil?
+    Hash[keys(cwl, '.inputs', []).map{ |inp|
+           [inp.id, UninstantiatedVariable.new("$#{inp.id}")]
+         }]
+  else
     Hash[walk(cwl, '.inputs', []).map{ |inp|
            [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
                                  inp.default, inp.inputBinding.loadContents, runtime)]
-         }]
-  else
-    Hash[keys(cwl, '.inputs', []).map{ |inp|
-           [inp.id, UninstantiatedVariable.new("$#{inp.id}")]
          }]
   end
 end
