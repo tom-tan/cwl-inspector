@@ -94,7 +94,6 @@ class Array
     if path.empty?
       return self
     end
-
     idx = path.shift
     if idx.match(/^\d+$/)
       i = idx.to_i
@@ -1028,7 +1027,7 @@ class CommandInputArraySchema < CWLObject
   end
 
   def initialize(obj)
-    unless valid?(obj)
+    unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @items = CWLCommandInputType.load(obj['items'])
