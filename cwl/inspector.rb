@@ -159,27 +159,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
     walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
   else
     type = if type.nil?
-             case value
-             when TrueClass, FalseClass
-               CWLType.load('boolean')
-             when Integer
-               CWLType.load('int')
-             when Float
-               CWLType.load('float')
-             when String
-               CWLType.load('string')
-             when Hash
-               case value.fetch('class', nil)
-               when 'File'
-                 CWLType.load('File')
-               when 'Direcotry'
-                 CWLType.load('Directory')
-               else
-                 raise CWLInspectionError, "Unsupported value: #{value}"
-               end
-             else
-               raise CWLInspectionError, "Unsupported value: #{value}"
-             end
+             guess_type(value)
            else
              type
            end
@@ -229,6 +209,35 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
     else
       raise CWLInspectionError, "Unsupported type: #{type}"
     end
+  end
+end
+
+def guess_type(value)
+  case value
+  when TrueClass, FalseClass
+    CWLType.load('boolean')
+  when Integer
+    CWLType.load('int')
+  when Float
+    CWLType.load('float')
+  when String
+    CWLType.load('string')
+  when Hash
+    case value.fetch('class', nil)
+    when 'File'
+      CWLType.load('File')
+    when 'Direcotry'
+      CWLType.load('Directory')
+    else
+      raise CWLInspectionError, "Unsupported value: #{value}"
+    end
+  when Array
+    CommandInputArraySchema.load({
+                                   'type' => 'array',
+                                   'items' => guess_type(value.first).to_h,
+                                 })
+  else
+    raise CWLInspectionError, "Unsupported value: #{value}"
   end
 end
 
