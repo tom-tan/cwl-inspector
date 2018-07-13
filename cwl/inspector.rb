@@ -22,6 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
+require 'etc'
 require 'optparse'
 require_relative 'parser'
 
@@ -62,9 +63,9 @@ class UninstantiatedVariable
 end
 
 def docker_command(cwl, runtime, inputs)
-  img = if walk(cwl, '.requirements.DockerRequirement', nil)
+  img = if walk(cwl, '.requirements.DockerRequirement', false)
           walk(cwl, '.requirements.DockerRequirement.dockerPull', nil)
-        elsif walk(cwl, '.hints.DockerRequirement', nil) and system('which docker > /dev/null')
+        elsif walk(cwl, '.hints.DockerRequirement', false) and system('which docker > /dev/null')
           walk(cwl, '.hints.DockerRequirement.dockerPull', nil)
         else
           nil
@@ -116,7 +117,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
             valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
           elsif valueFrom
             valueFrom.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                               runtime, inputs, self_)
+                               inputs, runtime, self_)
           else
             self_
           end
@@ -227,7 +228,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 
   redirect_in = if walk(cwl, '.stdin', nil)
                   fname = cwl.stdin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                             runtime, inputs, self_)
+                                             inputs, runtime, self_)
                   ['<', fname]
                 else
                   []
@@ -235,7 +236,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 
   redirect_out = if walk(cwl, '.stdout', nil)
                    fname = cwl.stdout.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                               runtime, inputs, self_)
+                                               inputs, runtime, self_)
                    ['>', File.join(runtime['outdir'], fname)]
                  else
                    []
@@ -243,7 +244,7 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 
   redirect_err = if walk(cwl, '.stderr', nil)
                    fname = cwl.stderr.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                               runtime, inputs, self_)
+                                               inputs, runtime, self_)
                    ['2>', File.join(runtime['outdir'], fname)]
                  else
                    []
@@ -260,25 +261,47 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
 end
 
 def eval_runtime(file)
-  # TODO
-  {
-    'coresMin' => 1,
-    'coresMax' => 1,
-    'ramMin' => 1024,
-    'ramMax' => 1024,
-    'tmpdirMin' => 1024,
-    'tmpdirMax' => 1024,
-    'outdirMin' => 1024,
-    'outdirMax' => 1024,
-    'tmpdir' => '/tmp',
-    'outdir' => File.absolute_path(Dir.pwd),
-    'docdir' => [
-      File.dirname(File.expand_path file),
-      '/usr/share/commonwl',
-      '/usr/local/share/commonwl',
-      File.join(ENV.fetch('XDG_DATA_HOME', File.join(ENV['HOME'], '.local', 'share')), 'commonwl'),
-    ]
-  }
+  runtime = {}
+  reqs = walk(file, '.requirements.ResourceRequirement', {}).to_h
+  hints = walk(file, '.hints.ResourceRequirement', {}).to_h
+
+  # cores
+  coresMin = reqs.fetch('coresMin', hints.fetch('coresMin', nil))
+  coresMax = reqs.fetch('coresMax', hints.fetch('coresMax', nil))
+  raise "Invalid ResourceRequirement" if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
+  coresMin = coresMax if coresMin.nil?
+  coresMax = coresMin if coresMax.nil?
+  ncores = Etc.nprocessors
+  runtime['cores'] = if coresMin.nil? and coresMax.nil?
+                       ncores
+                     else
+                       raise "Invalid ResourceRequirement" if ncores < coresMin
+                       [ncores, coresMax].min
+                     end
+
+  # mem
+  ramMin = reqs.fetch('ramMin', hints.fetch('ramMin', nil))
+  ramMax = reqs.fetch('ramMax', hints.fetch('ramMax', nil))
+  raise "Invalid ResourceRequirement" if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
+  ramMin = ramMax if ramMin.nil?
+  ramMax = ramMin if ramMax.nil?
+  ram = 1024 # default value in cwltool
+  runtime['ram'] = if ramMin.nil? and ramMax.nil?
+                     ram
+                   else
+                     raise "Invalid ResourceRequirement" if ram < ramMin
+                     [ram, ramMax].min
+                   end
+  runtime['tmpdir'] = '/tmp'
+  runtime['outdir'] = File.absolute_path(Dir.pwd)
+  runtime['docdir'] = [
+    File.dirname(File.expand_path file),
+    '/usr/share/commonwl',
+    '/usr/local/share/commonwl',
+    File.join(ENV.fetch('XDG_DATA_HOME', File.join(ENV['HOME'], '.local', 'share')), 'commonwl'),
+  ]
+
+  runtime
 end
 
 def parse_inputs(cwl, inputs, runtime)
