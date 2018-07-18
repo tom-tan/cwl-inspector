@@ -19,7 +19,7 @@ script:
 
 deploy:
   provider: script
-  script: deploy.sh
+  script: sh deploy.sh
   on:
     branch: master
     os: linux
