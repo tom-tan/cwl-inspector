@@ -3,6 +3,10 @@ sudo: required
 notifications:
   email: false
 
+os:
+  - linux
+  - osx
+
 language: ruby
 rvm:
   - 2.5.1
