@@ -31,7 +31,7 @@ class TestWorkflow < Test::Unit::TestCase
                                               'path' => 'Foo.java',
                                             }
                                           },
-                                          @runtime)))
+                                          @runtime, false)))
   end
 
   def test_steps

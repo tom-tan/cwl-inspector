@@ -724,7 +724,7 @@ class CWLFile < CWLObject
     @contents = nil
   end
 
-  def evaluate(runtime, loadContents = false)
+  def evaluate(runtime, loadContents = false, strict = true)
     file = self.dup
     location = @location.nil? ? @path : @location
     if location.nil?
@@ -752,7 +752,7 @@ class CWLFile < CWLObject
                                else
                                  path = File.expand_path(location, runtime['docdir'].first)
                                  unless File.exist? path
-                                   raise CWLInspectionError, "File not found: file://#{path}"
+                                   raise CWLInspectionError, "File not found: file://#{path}" if strict
                                  end
                                  ['file://'+path, path]
                                end
@@ -760,18 +760,20 @@ class CWLFile < CWLObject
     file.dirname = File.dirname file.path
     file.nameext = File.extname file.path
     file.nameroot = File.basename file.path, file.nameext
-    digest = Digest::SHA1.hexdigest(File.open(file.path, 'rb').read)
-    file.checksum = "sha1$#{digest}"
-    file.size = File.size(file.path)
+    if strict
+      digest = Digest::SHA1.hexdigest(File.open(file.path, 'rb').read)
+      file.checksum = "sha1$#{digest}"
+      file.size = File.size(file.path)
+    end
     file.secondaryFiles = @secondaryFiles.map{ |sf|
-      sf.evaluate(runtime, loadContents)
+      sf.evaluate(runtime, loadContents, strict)
     }
-    file.format = @format
     file.contents = if @contents
                       @contents
-                    elsif loadContents
+                    elsif loadContents and strict
                       File.open(file.path).read(64*2**10)
                     end
+    file.format = @format
     file
   end
 
@@ -830,7 +832,7 @@ class Directory < CWLObject
     }
   end
 
-  def evaluate(runtime, loadContents = false)
+  def evaluate(runtime, loadContents = false, strict = true)
     dir = self.dup
     location = @location.nil? ? @path : @location
     if @location.nil?
@@ -855,14 +857,14 @@ class Directory < CWLObject
                                end
                              else
                                unless Dir.exist? location
-                                 raise CWLInspectionError, "Directory not found: #{location}"
+                                 raise CWLInspectionError, "Directory not found: #{location}" if strict
                                end
                                path = File.expand_path(location, runtime['docdir'].first)
                                ['file://'+path, path]
                              end
     dir.basename = File.basename dir.path
     dir.listing = @listing.map{ |lst|
-      lst.evaluate(runtime, loadContents)
+      lst.evaluate(runtime, loadContents, strict)
     }
   end
 
