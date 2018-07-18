@@ -17,5 +17,9 @@ services:
 script:
   - ./test/run_test.rb
 
-after_success:
-  - ./deploy.sh
+deploy:
+  provider: script
+  script: deploy.sh
+  on:
+    branch: master
+    os: linux
