@@ -180,7 +180,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
         tmp = pre ? [pre, val] : [val]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       when 'File'
-        tmp = pre ? [pre, value.path] : [value.path]
+        tmp = pre ? [pre, "'#{value.path}'"] : ["'#{value.path}'"]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       # when 'Directory'
       else
@@ -422,20 +422,12 @@ def parse_object(id, type, obj, default, loadContents, runtime)
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
       file = obj.nil? ? default : CWLFile.load(obj)
-      path = file.location.sub %r|^.+//|, ''
-      unless File.exist? path
-        raise CWLInspectionError, "File not found: #{path}"
-      end
       file.evaluate(runtime, loadContents)
     when 'Directory'
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
       dir = obj.nil? ? default : Directory.load(obj)
-      path = dir.location.sub %r|^.+//|, ''
-      unless Dir.exist? path
-        raise CWLInspectionError, "Directory not found: #{path}"
-      end
       dir.evaluate(runtime, nil)
     end
   when CommandInputUnionSchema

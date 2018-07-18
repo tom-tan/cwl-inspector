@@ -750,10 +750,10 @@ class CWLFile < CWLObject
                                    raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                  end
                                else
-                                 unless File.exist? location
-                                   raise CWLInspectionError, "File not found: file://#{location}"
-                                 end
                                  path = File.expand_path(location, runtime['docdir'].first)
+                                 unless File.exist? path
+                                   raise CWLInspectionError, "File not found: file://#{path}"
+                                 end
                                  ['file://'+path, path]
                                end
     file.basename = File.basename file.path
