@@ -23,9 +23,9 @@ inputs:
     label: Input string
     doc: This is an input string
 outputs:
-  - id: output
-    type: string?
-    outputBinding: {}
+  output:
+    type: stdout
+stdout: output
 requirements:
   - class: DockerRequirement
     dockerPull: docker/whalesay
@@ -33,52 +33,56 @@ requirements:
 
 ## show a property named 'cwlVersion'
 ```console
-$ ./cwl-inspector.rb echo.cwl .cwlVersion
-v1.0
+$ ./inspector.rb echo.cwl .cwlVersion
+--- v1.0
 ```
 
 ## show a nested property
 ```console
-$ ./cwl-inspector.rb echo.cwl .requirements.0.class
-DockerRequirement
+$ ./inspector.rb echo.cwl .requirements.0.class
+--- DockerRequirement
 ```
 
 You can access an input parameter by using its index (specified by `position` field) or its id.
 
 ```console
-$ ./cwl-inspector.rb echo.cwl .inputs.0.label
-Input string
+$ ./inspector.rb echo.cwl .inputs.0.label
+--- Input string
 ```
 
 or
 
 ```console
 $ ./cwl-inspector.rb echo.cwl .inputs.input.label
-Input string
+--- Input string
 ```
 
 ## show keys in the specified property
 ```console
-$ ./cwl-inspector.rb echo.cwl 'keys(.)'
-class
-cwlVersion
-id
-baseCommand
-inputs
-outputs
-requirements
+$ ./inspector.rb echo.cwl 'keys(.)'
+---
+- inputs
+- outputs
+- class
+- id
+- requirements
+- cwlVersion
+- baseCommand
+- stdout
 ```
 
 ## show the command to run a given cwl file
 ```console
-$ ./cwl-inspector.rb echo.cwl commandline
-docker run -i --rm docker/whalesay cowsay [ $input ]
+$ ./inspector.rb echo.cwl commandline
+docker run -i --read-only --rm --workdir=/private/var/spool/cwl --env=HOME=/private/var/spool/cwl --env=TMPDIR=/tmp --user=501:20 -v /Users/tom-tan/cwl-inspector/examples/echo:/private/var/spool/cwl -v /tmp:/tmp docker/whalesay cowsay > /Users/tom-tan/cwl-inspector/examples/echo/output
 ```
 
 You can also specify the parameter to show the command with instantiated parameters.
 ```console
-$ ./cwl-inspector.rb echo.cwl commandline -- --input Hello!
-docker run -i --rm docker/whalesay cowsay Hello!
+$ cat inputs.yml
+input: Hello!
+$ ./inspector.rb echo.cwl commandline -i inputs.yml
+docker run -i --read-only --rm --workdir=/private/var/spool/cwl --env=HOME=/private/var/spool/cwl --env=TMPDIR=/tmp --user=501:20 -v /Users/tom-tan/cwl-inspector/examples/echo:/private/var/spool/cwl -v /tmp:/tmp docker/whalesay cowsay 'Hello!' > /Users/tom-tan/cwl-inspector/examples/echo/output
 ```
 
 # Dockerized cwl-inspector
@@ -87,7 +91,7 @@ This image is built by [Travis CI](https://travis-ci.org/tom-tan/cwl-inspector).
 
 ```console
 $ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - .cwlVersion
-v1.0
+--- v1.0
 ```
 
 # License

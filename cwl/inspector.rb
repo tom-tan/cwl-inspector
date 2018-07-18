@@ -280,8 +280,10 @@ def container_command(cwl, runtime, inputs = nil, self_ = nil, container = :dock
   end
 end
 
-def commandline(file, runtime = {}, inputs = nil, self_ = nil)
-  cwl = CommonWorkflowLanguage.load_file(file)
+def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
+  if cwl.instance_of? String
+    cwl = CommonWorkflowLanguage.load_file(cwl)
+  end
   container_cmd, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
 
   redirect_in = if walk(cwl, '.stdin')
@@ -318,10 +320,10 @@ def commandline(file, runtime = {}, inputs = nil, self_ = nil)
   ].compact.join(' ')
 end
 
-def eval_runtime(file)
+def eval_runtime(cwl)
   runtime = {}
-  reqs = walk(file, '.requirements.ResourceRequirement', {}).to_h
-  hints = walk(file, '.hints.ResourceRequirement', {}).to_h
+  reqs = walk(cwl, '.requirements.ResourceRequirement', {}).to_h
+  hints = walk(cwl, '.hints.ResourceRequirement', {}).to_h
 
   # cores
   coresMin = reqs.fetch('coresMin', hints.fetch('coresMin', nil))
@@ -353,7 +355,7 @@ def eval_runtime(file)
   runtime['tmpdir'] = '/tmp'
   runtime['outdir'] = File.absolute_path(Dir.pwd)
   runtime['docdir'] = [
-    File.dirname(File.expand_path file),
+    cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
     '/usr/share/commonwl',
     '/usr/local/share/commonwl',
     File.join(ENV.fetch('XDG_DATA_HOME', File.join(ENV['HOME'], '.local', 'share')), 'commonwl'),
@@ -476,8 +478,10 @@ def parse_object(id, type, obj, default, loadContents, runtime, strict)
   end
 end
 
-def list(file, runtime, inputs)
-  cwl = CommonWorkflowLanguage.load_file(file)
+def list(cwl, runtime, inputs)
+  if cwl.instance_of? String
+    cwl = CommonWorkflowLanguage.load_file(file)
+  end
   dir = runtime['outdir']
 
   if File.exist? File.join(dir, 'cwl.output.json')
@@ -599,7 +603,7 @@ if $0 == __FILE__
   end
 
   file, cmd = ARGV
-  unless File.exist? file
+  unless File.exist?(file) or file == '-'
     raise CWLInspectionError, "No such file: #{file}"
   end
 
@@ -609,24 +613,29 @@ if $0 == __FILE__
           ->(a) { JSON.dump(a) }
         end
 
-  runtime = eval_runtime(file)
-  inputs = parse_inputs(file, inp_obj, runtime, strict)
+  cwl = if file == '-'
+          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first)
+        else
+          CommonWorkflowLanguage.load_file(file)
+        end
+  runtime = eval_runtime(cwl)
+  inputs = parse_inputs(cwl, inp_obj, runtime, strict)
 
   ret = case cmd
         when /^\..*/
-          fmt.call walk(file, cmd).to_h
+          fmt.call walk(cwl, cmd).to_h
         when /^keys\((\..*)\)$/
-          fmt.call keys(file, $1)
+          fmt.call keys(cwl, $1)
         when 'commandline'
-          if walk(file, '.class') != 'CommandLineTool'
-            raise CWLInspectionError, "`commandline` does not support #{walk(file, '.class')} class"
+          if walk(cwl, '.class') != 'CommandLineTool'
+            raise CWLInspectionError, "`commandline` does not support #{walk(cwl, '.class')} class"
           end
-          commandline(file, runtime, inputs)
+          commandline(cwl, runtime, inputs)
         when 'list'
-          if walk(file, '.class') != 'CommandLineTool'
-            raise CWLInspectionError, "`list` does not support #{walk(file, '.class')} class"
+          if walk(cwl, '.class') != 'CommandLineTool'
+            raise CWLInspectionError, "`list` does not support #{walk(cwl, '.class')} class"
           end
-          list(file, runtime, inputs)
+          list(cwl, runtime, inputs)
         else
           raise CWLInspectionError, "Unsupported command: #{cmd}"
         end
