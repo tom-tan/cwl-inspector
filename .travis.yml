@@ -10,8 +10,6 @@ rvm:
 services:
   - docker
 
-install: gem install parslet
-
 script:
   - ./test/run_test.rb
 
