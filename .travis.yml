@@ -22,4 +22,4 @@ deploy:
   script: sh deploy.sh
   on:
     branch: master
-    os: linux
+    condition: $TRAVIS_OS_NAME = linux
