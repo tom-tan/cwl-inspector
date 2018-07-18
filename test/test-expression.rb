@@ -2,7 +2,7 @@
 # coding: utf-8
 require 'yaml'
 require 'test/unit'
-require_relative '../cwl-inspector'
+require_relative '../cwl/inspector'
 
 unless defined? CWL_PATH
   CWL_PATH=File.join(File.dirname(__FILE__), '..', 'examples')
@@ -10,7 +10,12 @@ end
 
 class TestExpression < Test::Unit::TestCase
   def setup
-    @cwl = YAML.load_file(File.join(CWL_PATH, 'expression', 'expression.cwl'))
+    @cwl = File.join(CWL_PATH, 'expression', 'expression.cwl')
+    @runtime = {
+      'outdir' => File.absolute_path('.'),
+      'docdir' => '.',
+      'tmpdir' => '/tmp',
+    }
   end
 
   def test_commandline
@@ -20,6 +25,7 @@ class TestExpression < Test::Unit::TestCase
       skip # if nodejs is not installed
     end
     assert_equal('echo -A 2 -B \'baz\' -C 10 9 8 7 6 5 4 3 2 1',
-                 cwl_inspect(@cwl, 'commandline'))
+                 commandline(@cwl, @runtime,
+                             parse_inputs(@cwl, {}, @runtime)))
   end
 end
