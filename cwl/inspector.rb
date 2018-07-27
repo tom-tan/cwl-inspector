@@ -212,35 +212,6 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
   end
 end
 
-def guess_type(value)
-  case value
-  when TrueClass, FalseClass
-    CWLType.load('boolean')
-  when Integer
-    CWLType.load('int')
-  when Float
-    CWLType.load('float')
-  when String
-    CWLType.load('string')
-  when Hash
-    case value.fetch('class', nil)
-    when 'File'
-      CWLType.load('File')
-    when 'Direcotry'
-      CWLType.load('Directory')
-    else
-      raise CWLInspectionError, "Unsupported value: #{value}"
-    end
-  when Array
-    CommandInputArraySchema.load({
-                                   'type' => 'array',
-                                   'items' => guess_type(value.first).to_h,
-                                 })
-  else
-    raise CWLInspectionError, "Unsupported value: #{value}"
-  end
-end
-
 def construct_args(cwl, runtime, inputs, self_)
   arr = walk(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
     i = walk(body, '.position', 0)
@@ -320,7 +291,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   ].compact.join(' ')
 end
 
-def eval_runtime(cwl)
+def eval_runtime(cwl, outdir, tmpdir)
   runtime = {}
   reqs = walk(cwl, '.requirements.ResourceRequirement', {}).to_h
   hints = walk(cwl, '.hints.ResourceRequirement', {}).to_h
@@ -352,8 +323,8 @@ def eval_runtime(cwl)
                      raise "Invalid ResourceRequirement" if ram < ramMin
                      [ram, ramMax].min
                    end
-  runtime['tmpdir'] = '/tmp'
-  runtime['outdir'] = File.absolute_path(Dir.pwd)
+  runtime['tmpdir'] = (tmpdir or '/tmp')
+  runtime['outdir'] = (outdir or File.absolute_path(Dir.pwd))
   runtime['docdir'] = [
     cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
     '/usr/share/commonwl',
@@ -575,6 +546,8 @@ if $0 == __FILE__
   format = :yaml
   inp_obj = nil
   strict = true
+  outdir = nil
+  tmpdir = nil
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} [options] cwl cmd"
   opt.on('-j', '--json', 'Print result in JSON format') {
@@ -594,6 +567,12 @@ if $0 == __FILE__
               else
                 YAML.load_file(inp)
               end
+  }
+  opt.on('--outdir=dir') { |dir|
+    outdir = File.expand_path dir
+  }
+  opt.on('--tmpdir=dir') { |dir|
+    tmpdir = File.expand_path dir
   }
   opt.parse!(ARGV)
 
@@ -618,7 +597,7 @@ if $0 == __FILE__
         else
           CommonWorkflowLanguage.load_file(file)
         end
-  runtime = eval_runtime(cwl)
+  runtime = eval_runtime(file, outdir, tmpdir)
   inputs = parse_inputs(cwl, inp_obj, runtime, strict)
 
   ret = case cmd

@@ -2853,8 +2853,7 @@ class WorkflowStepInput < CWLObject
                    LinkMergeMethod.load('merge_nested')
                  end
     @default = if obj.include? 'default'
-                 # type?
-                 raise CWLParseError, "Unsupported `default` in #{self.class}"
+                 InputParameter.parse_object(nil, obj['default'])
                end
     @valueFrom = if obj.include? 'valueFrom'
                    Expression.load(obj['valueFrom'])
@@ -3359,6 +3358,10 @@ end
 
 class InputParameter
   def self.parse_object(type, obj)
+    if type.nil?
+      type = guess_type(obj)
+    end
+
     case type
     when CWLType
       case type.type
@@ -3430,6 +3433,37 @@ class CWLUnionValue
 
   def to_h
     @value.to_h
+  end
+end
+
+def guess_type(value)
+  case value
+  when nil
+    CWLType.load('null')
+  when TrueClass, FalseClass
+    CWLType.load('boolean')
+  when Integer
+    CWLType.load('int')
+  when Float
+    CWLType.load('float')
+  when String
+    CWLType.load('string')
+  when Hash
+    case value.fetch('class', nil)
+    when 'File'
+      CWLType.load('File')
+    when 'Direcotry'
+      CWLType.load('Directory')
+    else
+      raise CWLInspectionError, "Unsupported value: #{value}"
+    end
+  when Array
+    CommandInputArraySchema.load({
+                                   'type' => 'array',
+                                   'items' => guess_type(value.first).to_h,
+                                 })
+  else
+    raise CWLInspectionError, "Unsupported value: #{value}"
   end
 end
 
