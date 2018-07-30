@@ -460,9 +460,9 @@ def list(cwl, runtime, inputs)
       JSON.load(f)
     }
   else
-    JSON.dump(Hash[walk(cwl, '.outputs', []).map { |o|
-                     [o.id, list_(cwl, o, runtime, inputs).to_h]
-                   }])
+    Hash[walk(cwl, '.outputs', []).map { |o|
+           [o.id, list_(cwl, o, runtime, inputs).to_h]
+         }]
   end
 end
 
@@ -614,7 +614,7 @@ if $0 == __FILE__
           if walk(cwl, '.class') != 'CommandLineTool'
             raise CWLInspectionError, "`list` does not support #{walk(cwl, '.class')} class"
           end
-          list(cwl, runtime, inputs)
+          fmt.call list(cwl, runtime, inputs)
         else
           raise CWLInspectionError, "Unsupported command: #{cmd}"
         end
