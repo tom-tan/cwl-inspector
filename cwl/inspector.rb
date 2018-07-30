@@ -507,14 +507,14 @@ def list_(cwl, output, runtime, inputs)
              else
                pats
              end
-      Dir.glob(pats, dir).map{ |f|
+      Dir.glob(pats, base: dir).map{ |f|
         CWLFile.load({
                        'class' => 'File',
-                       'location' => 'file://'+f,
+                       'location' => 'file://'+File.expand_path(f, dir),
                      })
       }
     }.flatten.map{ |f|
-      if File.exist? f.sub(%r|^file://|, '')
+      if File.exist? f.location.sub(%r|^file://|, '')
         f.evaluate(runtime, loadContents)
       else
         f
