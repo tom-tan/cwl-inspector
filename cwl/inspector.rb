@@ -529,10 +529,11 @@ def list_(cwl, output, runtime, inputs)
     unless obj.secondaryFiles.empty?
       raise CWLInspectionError, '`secondaryFiles` is not supported'
     end
-    if obj.type.instance_of? CWLFile
+    if obj.type.instance_of?(CWLType) and (obj.type.type == 'File' or
+                                           obj.type.type == 'Directory')
       evaled.first.evaluate(runtime, false)
     elsif obj.type.instance_of?(CommandOutputArraySchema) and
-         obj.type.items == 'File'
+         (obj.type.items == 'File' or obj.type.items == 'Directory')
       evaled.map{ |f|
         f.evaluate(runtime, false)
       }
