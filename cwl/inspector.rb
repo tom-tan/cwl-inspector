@@ -323,8 +323,8 @@ def eval_runtime(cwl, outdir, tmpdir)
                      raise "Invalid ResourceRequirement" if ram < ramMin
                      [ram, ramMax].min
                    end
-  runtime['tmpdir'] = (tmpdir or '/tmp')
-  runtime['outdir'] = (outdir or File.absolute_path(Dir.pwd))
+  runtime['tmpdir'] = tmpdir
+  runtime['outdir'] = outdir
   runtime['docdir'] = [
     cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
     '/usr/share/commonwl',
@@ -470,22 +470,30 @@ def list_(cwl, output, runtime, inputs)
   type = output.type
   case type
   when Stdout
-    fname = walk(cwl, '.stdout', Expression.load('$randomized_filename'))
+    fname = walk(cwl, '.stdout')
     evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                             inputs, runtime, nil)
     dir = runtime['outdir']
-    location = File.absolute_path(File.join(dir, evaled))
+    location = if evaled.end_with? '.stdout'
+                 File.join(dir, Dir.glob('*.stdout', base: dir).first)
+               else
+                 File.join(dir, evaled)
+               end
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
                         })
     File.exist?(location) ? file.evaluate(runtime, false) : file
   when Stderr
-    fname = walk(cwl, '.stderr', Expression.load('$randomized_filename'))
+    fname = walk(cwl, '.stderr')
     evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                             inputs, runtime, nil)
     dir = runtime['outdir']
-    location = File.absolute_path(File.join(dir, evaled))
+    location = if evaled.end_with? '.stderr'
+                 File.join(dir, Dir.glob('*.stderr', base: dir).first)
+               else
+                 File.join(dir, evaled)
+               end
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
@@ -547,8 +555,8 @@ if $0 == __FILE__
   format = :yaml
   inp_obj = nil
   strict = true
-  outdir = nil
-  tmpdir = nil
+  outdir = File.absolute_path Dir.pwd
+  tmpdir = '/tmp'
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} [options] cwl cmd"
   opt.on('-j', '--json', 'Print result in JSON format') {

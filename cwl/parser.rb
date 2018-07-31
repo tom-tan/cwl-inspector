@@ -334,14 +334,14 @@ class CommandLineTool < CWLObject
     @stderr = if obj.include?('stderr')
                 Expression.load(obj['stderr'])
               elsif @outputs.index{ |o| o.type.instance_of? Stderr }
-                Expression.load(SecureRandom.alphanumeric)
+                Expression.load(SecureRandom.alphanumeric+'.stderr')
               else
                 nil
               end
     @stdout = if obj.include?('stdout')
                 Expression.load(obj['stdout'])
               elsif @outputs.index{ |o| o.type.instance_of? Stdout }
-                Expression.load(SecureRandom.alphanumeric)
+                Expression.load(SecureRandom.alphanumeric+'.stdout')
               else
                 nil
               end
