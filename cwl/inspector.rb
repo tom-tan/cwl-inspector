@@ -26,25 +26,6 @@ require 'etc'
 require 'optparse'
 require_relative 'parser'
 
-def walk(cwl, path, default=nil, exception=false)
-  unless path.start_with? '.'
-    raise CWLInspectionError, "Invalid path: #{path}"
-  end
-  if cwl.instance_of? String
-    cwl = CommonWorkflowLanguage.load_file(cwl)
-  end
-
-  begin
-    cwl.walk(path[1..-1].split(/\.|\[|\]\.|\]/))
-  rescue CWLInspectionError => e
-    if exception
-      raise e
-    else
-      default
-    end
-  end
-end
-
 def keys(file, path, default=[])
   obj = walk(file, path, nil)
   if obj.instance_of?(Array)

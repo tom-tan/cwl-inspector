@@ -40,6 +40,25 @@ end
 class CWLInspectionError < Exception
 end
 
+def walk(cwl, path, default=nil, exception=false)
+  unless path.start_with? '.'
+    raise CWLInspectionError, "Invalid path: #{path}"
+  end
+  if cwl.instance_of? String
+    cwl = CommonWorkflowLanguage.load_file(cwl)
+  end
+
+  begin
+    cwl.walk(path[1..-1].split(/\.|\[|\]\.|\]/))
+  rescue CWLInspectionError => e
+    if exception
+      raise e
+    else
+      default
+    end
+  end
+end
+
 class NilClass
   def walk(path)
     if path.empty?
@@ -2062,13 +2081,17 @@ end
 
 def evaluate_parameter_reference(exp, inputs, runtime, self_)
   case exp
-  when /^inputs\./
-    # inputs must be an object, not an array
-  when /^self\./
+  when /^inputs\.(.+)$/
+    body = $1
+    param, rest = body.match(/([^.]+)(\..+)?$/).values_at(1, 2)
+    obj = inputs[param]
+    obj.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+  when /^self\.(.+)$/
+    rest = $1
     if self_.nil?
       raise CWLInspectionError, "Unknown context for self in the expression: #{exp}"
     end
-    # eval
+    self_.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
   when /^runtime\.(.+)$/
     attr = $1
     if runtime.reject{ |k, _| k == 'docdir' }.include? attr
