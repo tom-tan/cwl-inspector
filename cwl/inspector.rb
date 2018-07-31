@@ -199,6 +199,8 @@ def construct_args(cwl, runtime, inputs, self_)
     [[i, idx], evaluate_input_binding(cwl, nil, body, runtime, inputs, nil)]
   }+walk(cwl, '.inputs', []).find_all{ |input|
     walk(input, '.inputBinding', nil)
+  }.find_all{ |input|
+    not inputs[input.id].nil?
   }.map{ |input|
     i = walk(input, '.inputBinding.position', 0)
     [[i, input.id], evaluate_input_binding(cwl, input.type, input.inputBinding, runtime, inputs, inputs[input.id])]
