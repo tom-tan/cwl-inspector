@@ -77,6 +77,10 @@ class Integer
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
   end
+
+  def to_h
+    self
+  end
 end
 
 class String
@@ -101,6 +105,10 @@ class TrueClass
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
   end
+
+  def to_h
+    self
+  end
 end
 
 class FalseClass
@@ -110,6 +118,10 @@ class FalseClass
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
+  end
+
+  def to_h
+    self
   end
 end
 
