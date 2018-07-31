@@ -392,7 +392,7 @@ class CommandLineTool < CWLObject
     when 'ResourceRequirement'
       ResourceRequirement.load(req)
     else
-      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+      raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
   end
 
@@ -2381,7 +2381,7 @@ class Workflow < CWLObject
     when 'StepInputExpressionRequirement'
       StepInputExpressionRequirement.load(req)
     else
-      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+      raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
   end
 
@@ -2820,7 +2820,7 @@ class WorkflowStep < CWLObject
     when 'StepInputExpressionRequirement'
       StepInputExpressionRequirement.load(req)
     else
-      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+      raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
   end
 
@@ -3058,7 +3058,7 @@ end
 
 class ExpressionTool < CWLObject
   cwl_object_preamble :inputs, :outputs, :class_, :expression,
-                      :id, :reqirements, :hints, :label,
+                      :id, :requirements, :hints, :label,
                       :doc, :cwlVersion
 
   def self.satisfies_additional_constraints(obj)
@@ -3195,7 +3195,7 @@ class ExpressionTool < CWLObject
     when 'StepInputExpressionRequirement'
       StepInputExpressionRequirement.load(req)
     else
-      raise CWLParseError, "Invalid reqirement: #{req['class']}"
+      raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
   end
 
@@ -3212,7 +3212,7 @@ class ExpressionTool < CWLObject
     unless @id.nil?
       ret['id'] = @id
     end
-    unless @reqirement.empty?
+    unless @requirement.empty?
       ret['requirements'] = @requirements.map{ |r|
         r.to_h
       }
