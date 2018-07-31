@@ -352,7 +352,8 @@ def parse_inputs(cwl, inputs, runtime, strict = true)
   else
     Hash[walk(cwl, '.inputs', []).map{ |inp|
            [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
-                                 inp.default, inp.inputBinding.loadContents, runtime, strict)]
+                                 inp.default, inp.inputBinding.nil? ? false : inp.inputBinding.loadContents,
+                                 runtime, strict)]
          }]
   end
 end
