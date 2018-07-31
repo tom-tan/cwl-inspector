@@ -27,6 +27,7 @@ require 'json'
 require 'fileutils'
 require 'optparse'
 require 'open-uri'
+require 'securerandom'
 require 'tmpdir'
 require 'tempfile'
 require 'digest/sha1'
@@ -330,8 +331,20 @@ class CommandLineTool < CWLObject
       end
     }
     @stdin = obj.include?('stdin') ? Expression.load(obj['stdin']) : nil
-    @stderr = obj.include?('stderr') ? Expression.load(obj['stderr']) : nil
-    @stdout = obj.include?('stdout') ? Expression.load(obj['stdout']) : nil
+    @stderr = if obj.include?('stderr')
+                Expression.load(obj['stderr'])
+              elsif @outputs.index{ |o| o.type.instance_of? Stderr }
+                Expression.load(SecureRandom.alphanumeric)
+              else
+                nil
+              end
+    @stdout = if obj.include?('stdout')
+                Expression.load(obj['stdout'])
+              elsif @outputs.index{ |o| o.type.instance_of? Stdout }
+                Expression.load(SecureRandom.alphanumeric)
+              else
+                nil
+              end
     @successCodes = obj.fetch('successCodes', [])
     @temporaryFailCodes = obj.fetch('temporaryFailCodes', [])
     @permanentFailCodes = obj.fetch('permanentFailCodes', [])
