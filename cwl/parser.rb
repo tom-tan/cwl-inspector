@@ -2127,16 +2127,19 @@ end
 
 def evaluate_js_expression(expression, kind, inputs, runtime, self_)
   node = node_bin
-  exp = kind == :expression ? expression : "(function() { #{expression.gsub(/\n/, '\n')} })()"
+  exp = kind == :expression ? expression : "(function() { #{expression.gsub(/\\/, '\\\\\\\\').gsub(/\n/, '\n')} })()"
   exp = exp.gsub(/"/, '\"')
+  replaced_inputs = Hash[inputs.map{ |k, v|
+                           [k, v.to_h]
+                         }]
   cmdstr = <<-EOS
   'use strict'
   try{
     const exp = "#{exp}";
     process.stdout.write(JSON.stringify(require('vm').runInNewContext(exp, {
       'runtime': #{JSON.dump(runtime.reject{ |k, _| k == 'docdir' })},
-      'inputs': #{JSON.dump(inputs)},
-      'self': #{JSON.dump(self_)}
+      'inputs': #{JSON.dump(replaced_inputs)},
+      'self': #{JSON.dump(self_.to_h)}
     })));
   } catch(e) {
     process.stdout.write(JSON.stringify({ 'class': 'exception', 'message': `${e.name}: ${e.message}`}))
