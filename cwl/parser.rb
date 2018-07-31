@@ -3212,7 +3212,7 @@ class ExpressionTool < CWLObject
     unless @id.nil?
       ret['id'] = @id
     end
-    unless @requirement.empty?
+    unless @requirements.empty?
       ret['requirements'] = @requirements.map{ |r|
         r.to_h
       }
