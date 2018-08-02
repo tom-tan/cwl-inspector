@@ -2127,7 +2127,11 @@ end
 
 def evaluate_js_expression(expression, kind, inputs, runtime, self_)
   node = node_bin
-  exp = kind == :expression ? "(#{expression})" : "(function() { #{expression.gsub(/\\/, '\\\\\\\\').gsub(/\n/, '\n')} })()"
+  exp = if kind == :expression
+          "(#{expression.gsub(/\\/){ '\\\\' }})"
+        else
+          "(function() { #{expression.gsub(/\\/){ '\\\\' }.gsub(/\n/, '\n')} })()"
+        end
   exp = exp.gsub(/"/, '\"')
   replaced_inputs = Hash[inputs.map{ |k, v|
                            [k, v.to_h]
