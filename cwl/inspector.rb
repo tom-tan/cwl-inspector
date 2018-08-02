@@ -378,13 +378,13 @@ def parse_object(id, type, obj, default, loadContents, runtime, strict)
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
-      file = obj.nil? ? default : CWLFile.load(obj)
+      file = obj.nil? ? default : CWLFile.load(obj, runtime['docdir'].first)
       file.evaluate(runtime, loadContents, strict)
     when 'Directory'
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
-      dir = obj.nil? ? default : Directory.load(obj)
+      dir = obj.nil? ? default : Directory.load(obj, runtime['docdir'].first)
       dir.evaluate(runtime, nil, strict)
     end
   when CommandInputUnionSchema
@@ -466,7 +466,7 @@ def list_(cwl, output, runtime, inputs)
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
-                        })
+                        }, runtime['docdir'].first)
     File.exist?(location) ? file.evaluate(runtime, false) : file
   when Stderr
     fname = walk(cwl, '.stderr')
@@ -481,7 +481,7 @@ def list_(cwl, output, runtime, inputs)
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
-                        })
+                        }, runtime['docdir'].first)
     File.exist?(location) ? file.evaluate(runtime, false) : file
   else
     obj = walk(cwl, ".outputs.#{output.id}")
@@ -503,7 +503,7 @@ def list_(cwl, output, runtime, inputs)
         CWLFile.load({
                        'class' => 'File',
                        'location' => 'file://'+File.expand_path(f, dir),
-                     })
+                     }, runtime['docdir'].first)
       }
     }.flatten.map{ |f|
       if File.exist? f.location.sub(%r|^file://|, '')
@@ -586,7 +586,7 @@ if $0 == __FILE__
         end
 
   cwl = if file == '-'
-          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first)
+          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd)
         else
           CommonWorkflowLanguage.load_file(file)
         end

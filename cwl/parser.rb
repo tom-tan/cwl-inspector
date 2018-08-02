@@ -184,17 +184,17 @@ end
 class CommonWorkflowLanguage
   def self.load_file(file)
     obj = YAML.load_file(file)
-    self.load(obj)
+    self.load(obj, File.dirname(File.expand_path(file)))
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj.fetch('class', '')
     when 'CommandLineTool'
-      CommandLineTool.load(obj)
+      CommandLineTool.load(obj, dir)
     when 'Workflow'
-      Workflow.load(obj)
+      Workflow.load(obj, dir)
     when 'ExpressionTool'
-      ExpressionTool.load(obj)
+      ExpressionTool.load(obj, dir)
     else
       raise CWLParseError, 'Cannot parse as #{self}'
     end
@@ -255,17 +255,17 @@ class CommandLineTool < CWLObject
       obj['class'] == 'CommandLineTool'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @inputs = if obj['inputs'].instance_of? Array
                 obj['inputs'].map{ |o|
-                  CommandInputParameter.load(o)
+                  CommandInputParameter.load(o, dir)
                 }
               else
                 obj['inputs'].map{ |k, v|
@@ -284,13 +284,13 @@ class CommandLineTool < CWLObject
                         }
                         o
                       end
-                  CommandInputParameter.load(o)
+                  CommandInputParameter.load(o, dir)
                 }
               end
 
     @outputs = if obj['outputs'].instance_of? Array
                  obj['outputs'].map{ |o|
-                   CommandOutputParameter.load(o)
+                   CommandOutputParameter.load(o, dir)
                  }
                else
                  obj['outputs'].map{ |k, v|
@@ -309,7 +309,7 @@ class CommandLineTool < CWLObject
                          }
                          o
                        end
-                   CommandOutputParameter.load(o)
+                   CommandOutputParameter.load(o, dir)
                  }
                end
 
@@ -328,7 +328,7 @@ class CommandLineTool < CWLObject
              }
            end
     @requirements = reqs.map{ |r|
-      self.class.load_requirement(r)
+      self.class.load_requirement(r, dir)
     }
 
     hints = if obj.fetch('hints', []).instance_of? Array
@@ -344,7 +344,7 @@ class CommandLineTool < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h)
+      self.class.load_requirement(h, dir)
     }
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
@@ -356,23 +356,23 @@ class CommandLineTool < CWLObject
                    end
     @arguments = obj.fetch('arguments', []).map{ |arg|
       if arg.instance_of? Hash
-        CommandLineBinding.load(arg)
+        CommandLineBinding.load(arg, dir)
       else
-        CommandLineBinding.load({ 'valueFrom' => arg, })
+        CommandLineBinding.load({ 'valueFrom' => arg, }, dir)
       end
     }
-    @stdin = obj.include?('stdin') ? Expression.load(obj['stdin']) : nil
+    @stdin = obj.include?('stdin') ? Expression.load(obj['stdin'], dir) : nil
     @stderr = if obj.include?('stderr')
-                Expression.load(obj['stderr'])
+                Expression.load(obj['stderr'], dir)
               elsif @outputs.index{ |o| o.type.instance_of? Stderr }
-                Expression.load(SecureRandom.alphanumeric+'.stderr')
+                Expression.load(SecureRandom.alphanumeric+'.stderr', dir)
               else
                 nil
               end
     @stdout = if obj.include?('stdout')
-                Expression.load(obj['stdout'])
+                Expression.load(obj['stdout'], dir)
               elsif @outputs.index{ |o| o.type.instance_of? Stdout }
-                Expression.load(SecureRandom.alphanumeric+'.stdout')
+                Expression.load(SecureRandom.alphanumeric+'.stdout', dir)
               else
                 nil
               end
@@ -381,28 +381,28 @@ class CommandLineTool < CWLObject
     @permanentFailCodes = obj.fetch('permanentFailCodes', [])
   end
 
-  def self.load_requirement(req)
+  def self.load_requirement(req, dir)
     unless req.include? 'class'
       raise CWLParseError, 'Invalid requriment object'
     end
 
     case req['class']
     when 'InlineJavascriptRequirement'
-      InlineJavascriptRequirement.load(req)
+      InlineJavascriptRequirement.load(req, dir)
     when 'SchemaDefRequirement'
-      SchemaDefRequirement.load(req)
+      SchemaDefRequirement.load(req, dir)
     when 'DockerRequirement'
-      DockerRequirement.load(req)
+      DockerRequirement.load(req, dir)
     when 'SoftwareRequirement'
-      SoftwareRequirement.load(req)
+      SoftwareRequirement.load(req, dir)
     when 'InitialWorkDirRequirement'
-      InitialWorkDirRequirement.load(req)
+      InitialWorkDirRequirement.load(req, dir)
     when 'EnvVarRequirement'
-      EnvVarRequirement.load(req)
+      EnvVarRequirement.load(req, dir)
     when 'ShellCommandRequirement'
-      ShellCommandRequirement.load(req)
+      ShellCommandRequirement.load(req, dir)
     when 'ResourceRequirement'
-      ResourceRequirement.load(req)
+      ResourceRequirement.load(req, dir)
     else
       raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
@@ -463,11 +463,11 @@ class CommandInputParameter < CWLObject
       ['id'].all?{ |f| obj.include? f }
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -476,10 +476,10 @@ class CommandInputParameter < CWLObject
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
-                          Expression.load(sec)
+                          Expression.load(sec, dir)
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'])]
+                        [Expression.load(obj['secondaryFiles'], dir)]
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
@@ -487,22 +487,22 @@ class CommandInputParameter < CWLObject
            end
     @format = if obj.fetch('format', []).instance_of? Array
                 obj.fetch('format', []).map{ |f|
-                  Expression.load(f)
+                  Expression.load(f, dir)
                 }
               else
-                [Expression.load(obj['format'])]
+                [Expression.load(obj['format'], dir)]
               end
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
     @type = if obj.include? 'type'
-              CWLCommandInputType.load(obj['type'])
+              CWLCommandInputType.load(obj['type'], dir)
             end
     @default = if obj.include? 'default'
                  if @type.nil?
                    raise CWLParseError, 'Unsupported syntax: `default` without `type`'
                  end
-                 InputParameter.parse_object(@type, obj['default'])
+                 InputParameter.parse_object(@type, obj['default'], dir)
                end
   end
 
@@ -535,11 +535,11 @@ class CommandLineBinding < CWLObject
   cwl_object_preamble :loadContents, :position, :prefix, :separate,
                       :itemSeparator, :valueFrom, :shellQuote
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -549,7 +549,7 @@ class CommandLineBinding < CWLObject
     @separate = obj.fetch('separate', true)
     @itemSeparator = obj.fetch('itemSeparator', nil)
     @valueFrom = if obj.include? 'valueFrom'
-                   Expression.load(obj['valueFrom'])
+                   Expression.load(obj['valueFrom'], dir)
                  end
     @shellQuote = obj.fetch('shellQuote', true)
   end
@@ -570,7 +570,7 @@ end
 class CWLType
   attr_reader :type
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -592,32 +592,32 @@ class CWLType
 end
 
 class CWLInputType
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj
     when Array
-      InputUnionSchema.load(obj)
+      InputUnionSchema.load(obj, dir)
     when Hash
       unless obj.include? 'type'
         raise CWLParseError, 'Invalid type object: #{obj}'
       end
       case obj['type']
       when 'record'
-        InputRecordSchema.load(obj)
+        InputRecordSchema.load(obj, dir)
       when 'enum'
-        InputEnumSchema.load(obj)
+        InputEnumSchema.load(obj, dir)
       when 'array'
-        InputArraySchema.load(obj)
+        InputArraySchema.load(obj, dir)
       end
     when /^(.+)\?$/
-      InputUnionSchema.load([$1, 'null'])
+      InputUnionSchema.load([$1, 'null'], dir)
     when /^(.+)\[\]$/
       InputArraySchema.load({
                               'type' => 'array',
                               'items' => $1,
-                            })
+                            }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
          'string', 'File', 'Directory'
-      CWLType.load(obj)
+      CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
     end
@@ -625,32 +625,32 @@ class CWLInputType
 end
 
 class CWLCommandInputType
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj
     when Array
-      CommandInputUnionSchema.load(obj)
+      CommandInputUnionSchema.load(obj, dir)
     when Hash
       unless obj.include? 'type'
         raise CWLParseError, 'Invalid type object: #{obj}'
       end
       case obj['type']
       when 'record'
-        CommandInputRecordSchema.load(obj)
+        CommandInputRecordSchema.load(obj, dir)
       when 'enum'
-        CommandInputEnumSchema.load(obj)
+        CommandInputEnumSchema.load(obj, dir)
       when 'array'
-        CommandInputArraySchema.load(obj)
+        CommandInputArraySchema.load(obj, dir)
       end
     when /^(.+)\?$/
-      CommandInputUnionSchema.load([$1, 'null'])
+      CommandInputUnionSchema.load([$1, 'null'], dir)
     when /^(.+)\[\]$/
       CommandInputArraySchema.load({
                                      'type' => 'array',
                                      'items' => $1,
-                                   })
+                                   }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
          'string', 'File', 'Directory'
-      CWLType.load(obj)
+      CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
     end
@@ -658,32 +658,32 @@ class CWLCommandInputType
 end
 
 class CWLOutputType
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj
     when Array
-      OutputUnionSchema.load(obj)
+      OutputUnionSchema.load(obj, dir)
     when Hash
       unless obj.include? 'type'
         raise CWLParseError, 'Invalid type object: #{obj}'
       end
       case obj['type']
       when 'record'
-        OutputRecordSchema.load(obj)
+        OutputRecordSchema.load(obj, dir)
       when 'enum'
-        OutputEnumSchema.load(obj)
+        OutputEnumSchema.load(obj, dir)
       when 'array'
-        OutputArraySchema.load(obj)
+        OutputArraySchema.load(obj, dir)
       end
     when /^(.+)\?$/
-      OutputUnionSchema.load([$1, 'null'])
+      OutputUnionSchema.load([$1, 'null'], dir)
     when /^(.+)\[\]$/
       OutputArraySchema.load({
                                'type' => 'array',
                                'items' => $1,
-                             })
+                             }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
          'string', 'File', 'Directory'
-      CWLType.load(obj)
+      CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj.to_h}"
     end
@@ -691,32 +691,32 @@ class CWLOutputType
 end
 
 class CWLCommandOutputType
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj
     when Array
-      CommandOutputUnionSchema.load(obj)
+      CommandOutputUnionSchema.load(obj, dir)
     when Hash
       unless obj.include? 'type'
         raise CWLParseError, 'Invalid type object: #{obj}'
       end
       case obj['type']
       when 'record'
-        CommandOutputRecordSchema.load(obj)
+        CommandOutputRecordSchema.load(obj, dir)
       when 'enum'
-        CommandOutputEnumSchema.load(obj)
+        CommandOutputEnumSchema.load(obj, dir)
       when 'array'
-        CommandOutputArraySchema.load(obj)
+        CommandOutputArraySchema.load(obj, dir)
       end
     when /^(.+)\?$/
-      CommandOutputUnionSchema.load([$1, 'null'])
+      CommandOutputUnionSchema.load([$1, 'null'], dir)
     when /^(.+)\[\]$/
       CommandOutputArraySchema.load({
                                      'type' => 'array',
                                      'items' => $1,
-                                   })
+                                   }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
          'string', 'File', 'Directory'
-      CWLType.load(obj)
+      CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
     end
@@ -737,11 +737,12 @@ class CWLFile < CWLObject
       obj.fetch('class', '') == 'File'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    file = self.new(obj, dir)
+    file.evaluate({ 'docdir' => [dir] }, false, false)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -757,9 +758,9 @@ class CWLFile < CWLObject
     @secondaryFiles = obj.fetch('secondaryFiles', []).map{ |f|
       case f.fetch('class', '')
       when 'File'
-        CWLFile.load(f)
+        CWLFile.load(f, dir)
       when 'Directory'
-        Directory.load(f)
+        Directory.load(f, dir)
       else
         raise CWLParseError, "Cannot parse as #{self.class}"
       end
@@ -852,11 +853,12 @@ class Directory < CWLObject
       obj.fetch('class', '') == 'Directory'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    d = self.new(obj, dir)
+    d.evaluate({ 'docdir' => [dir] }, false, false)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -867,9 +869,9 @@ class Directory < CWLObject
     @listing = obj.fetch('listing', []).map{ |f|
       case f.fetch('class', '')
       when 'File'
-        CWLFile.load(f)
+        CWLFile.load(f, dir)
       when 'Directory'
-        Directory.load(f)
+        Directory.load(f, dir)
       else
         raise CWLParseError, "Cannot parse as #{self.class}"
       end
@@ -930,17 +932,17 @@ end
 class CommandInputUnionSchema < CWLObject
   attr_reader :types
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless obj.instance_of? Array
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
     @types = obj.map{ |o|
-      CWLCommandInputType.load(o)
+      CWLCommandInputType.load(o, dir)
     }
   end
 
@@ -963,17 +965,17 @@ class CommandInputRecordSchema < CWLObject
       obj.fetch('type', '') == 'record'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
     @fields = obj.fetch('fields', []).map{ |f|
-      CommandInputRecordField.load(f)
+      CommandInputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
   end
@@ -1000,19 +1002,19 @@ class CommandInputRecordField < CWLObject
       obj.include?('type')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLCommandInputType.load(obj['type'])
+    @type = CWLCommandInputType.load(obj['type'], dir)
     @doc = obj.fetch('doc', nil)
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
     @label = obj.fetch('label', nil)
   end
@@ -1037,11 +1039,11 @@ class CommandInputEnumSchema < CWLObject
       obj.fetch('type', '') == 'enum'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -1049,7 +1051,7 @@ class CommandInputEnumSchema < CWLObject
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
   end
 
@@ -1072,19 +1074,19 @@ class CommandInputArraySchema < CWLObject
       obj.fetch('type', '') == 'array'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @items = CWLCommandInputType.load(obj['items'])
+    @items = CWLCommandInputType.load(obj['items'], dir)
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
   end
 
@@ -1107,11 +1109,11 @@ class CommandOutputParameter < CWLObject
       obj.include? 'id'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -1120,29 +1122,29 @@ class CommandOutputParameter < CWLObject
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |f|
-                          Expression.load(f)
+                          Expression.load(f, dir)
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'])]
+                        [Expression.load(obj['secondaryFiles'], dir)]
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
              obj['doc'].instance_of?(Array) ? obj['doc'].join : obj['doc']
            end
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
     @format = if obj.include? 'format'
-                Expression.load(obj['format'])
+                Expression.load(obj['format'], dir)
               end
     @type = if obj.include? 'type'
               case obj['type']
               when 'stdout'
-                Stdout.load(obj['type'])
+                Stdout.load(obj['type'], dir)
               when 'stderr'
-                Stderr.load(obj['type'])
+                Stderr.load(obj['type'], dir)
               else
-                CWLCommandOutputType.load(obj['type'])
+                CWLCommandOutputType.load(obj['type'], dir)
               end
             end
   end
@@ -1166,7 +1168,7 @@ class CommandOutputParameter < CWLObject
 end
 
 class Stdout
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new
   end
 
@@ -1184,7 +1186,7 @@ class Stdout
 end
 
 class Stderr
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new
   end
 
@@ -1204,26 +1206,26 @@ end
 class CommandOutputBinding < CWLObject
   cwl_object_preamble :glob, :loadContents, :outputEval
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
     @glob = if obj.fetch('glob', []).instance_of? Array
               obj.fetch('glob', []).map{ |g|
-                Expression.load(g)
+                Expression.load(g, dir)
               }
             else
-              [Expression.load(obj['glob'])]
+              [Expression.load(obj['glob'], dir)]
             end
 
     @loadContents = obj.fetch('loadContents', false)
     @outputEval = if obj.include? 'outputEval'
-                    Expression.load(obj['outputEval'])
+                    Expression.load(obj['outputEval'], dir)
                   end
   end
 
@@ -1243,17 +1245,17 @@ end
 class CommandOutputUnionSchema < CWLObject
   attr_reader :types
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless obj.instance_of? Array
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
     @types = obj.map{ |o|
-      CWLCommandOutputType.load(o)
+      CWLCommandOutputType.load(o, dir)
     }
   end
 
@@ -1276,17 +1278,17 @@ class CommandOutputRecordSchema < CWLObject
       obj.fetch('type', '') == 'record'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
     @fields = obj.fetch('fields', []).map{ |f|
-      CommandOutputRecordField.load(f)
+      CommandOutputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
   end
@@ -1313,19 +1315,19 @@ class CommandOutputRecordField < CWLObject
       obj.include?('type')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLCommandOutputType.load(obj['type'])
+    @type = CWLCommandOutputType.load(obj['type'], dir)
     @doc = obj.fetch('doc', nil)
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
   end
 
@@ -1348,11 +1350,11 @@ class CommandOutputEnumSchema < CWLObject
       obj.fetch('type', '') == 'enum'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -1360,7 +1362,7 @@ class CommandOutputEnumSchema < CWLObject
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
   end
 
@@ -1383,19 +1385,19 @@ class CommandOutputArraySchema < CWLObject
       obj.fetch('type', '') == 'array'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @items = CWLCommandOutputType.load(obj['items'])
+    @items = CWLCommandOutputType.load(obj['items'], dir)
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
   end
 
@@ -1417,7 +1419,7 @@ class InlineJavascriptRequirement < CWLObject
       obj.fetch('class', 'InlineJavascriptRequirement')
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -1448,21 +1450,21 @@ class SchemaDefRequirement < CWLObject
       obj.include? 'types'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
     @types = obj['types'].map{ |t|
-      self.class.load_input_type(t)
+      self.class.load_input_type(t, dir)
     }
   end
 
-  def self.load_input_type(obj)
+  def self.load_input_type(obj, dir)
     unless obj.instance_of?(Hash) and
           obj.include? 'type'
       raise CWLParseError, 'Invalid type object: #{obj}'
@@ -1470,11 +1472,11 @@ class SchemaDefRequirement < CWLObject
 
     case obj['type']
     when 'record'
-      InputRecordSchema.load(obj)
+      InputRecordSchema.load(obj, dir)
     when 'enum'
-      InputEnumSchema.load(obj)
+      InputEnumSchema.load(obj, dir)
     when 'array'
-      InputArraySchema.load(obj)
+      InputArraySchema.load(obj, dir)
     end
   end
 
@@ -1496,17 +1498,17 @@ class InputRecordSchema < CWLObject
       obj.fetch('type', '') == 'record'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
     @fields = obj.fetch('fields', []).map{ |f|
-      InputRecordField.load(f)
+      InputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
   end
@@ -1533,19 +1535,19 @@ class InputRecordField < CWLObject
       obj.include?('type')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLInputType.load(obj['type'])
+    @type = CWLInputType.load(obj['type'], dir)
     @doc = obj.fetch('doc', nil)
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
     @label = obj.fetch('label', nil)
   end
@@ -1570,8 +1572,8 @@ class InputEnumSchema < CWLObject
       obj.fetch('type', '') == 'enum'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
   def initialize(obj)
@@ -1582,7 +1584,7 @@ class InputEnumSchema < CWLObject
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
   end
 
@@ -1605,19 +1607,19 @@ class InputArraySchema < CWLObject
       obj.fetch('type', '') == 'array'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @items = CWLInputType.load(obj['items'])
+    @items = CWLInputType.load(obj['items'], dir)
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
   end
 
@@ -1640,7 +1642,7 @@ class DockerRequirement < CWLObject
       obj.fetch('class', '') == 'DockerRequirement'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -1679,18 +1681,18 @@ class SoftwareRequirement < CWLObject
       obj.include? 'packages'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
     @packages = if obj['packages'].instance_of? Array
                   obj['packages'].map{ |p|
-                    SoftwarePackage.load(p)
+                    SoftwarePackage.load(p, dir)
                   }
                 else
                   ps = obj['packages']
@@ -1712,7 +1714,7 @@ class SoftwareRequirement < CWLObject
                                }
                              end
                   packages.map{ |p|
-                    SoftwarePackage.load(p)
+                    SoftwarePackage.load(p, dir)
                   }
                 end
   end
@@ -1735,7 +1737,7 @@ class SoftwarePackage < CWLObject
       obj.include? 'package'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -1770,35 +1772,35 @@ class InitialWorkDirRequirement < CWLObject
       obj.include? 'listing'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
     @listing = if obj['listing'].instance_of? Array
                  obj['listing'].map{ |lst|
-                   self.class.load_list(lst)
+                   self.class.load_list(lst, dir)
                  }
                else
-                 Expression.load(obj['listing'])
+                 Expression.load(obj['listing'], dir)
                end
   end
 
-  def self.load_list(obj)
+  def self.load_list(obj, dir)
     if obj.instance_of? String
-      Expression.load(obj)
+      Expression.load(obj, dir)
     else
       case obj.fetch('class', 'Dirent')
       when 'File'
-        CWLFile.load(obj)
+        CWLFile.load(obj, dir)
       when 'Directory'
-        Directory.load(obj)
+        Directory.load(obj, dir)
       when 'Dirent'
-        Dirent.load(obj)
+        Dirent.load(obj, dir)
       end
     end
   end
@@ -1821,17 +1823,17 @@ class Dirent < CWLObject
       obj.include? 'entry'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @entry = Expression.load(obj['entry'])
+    @entry = Expression.load(obj['entry'], dir)
     @entryname = if obj.include? 'entryname'
-                   Expression.load(obj['entryname'])
+                   Expression.load(obj['entryname'], dir)
                  end
     @writable = obj.fetch('writable', false)
   end
@@ -1854,18 +1856,18 @@ class EnvVarRequirement < CWLObject
       obj.include? 'envDef'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
     @envDef = if obj['envDef'].instance_of? Array
                 obj['envDef'].map{ |env|
-                  EnvironmentDef.load(env)
+                  EnvironmentDef.load(env, dir)
                 }
               else
                 defs = obj['envDef']
@@ -1874,7 +1876,7 @@ class EnvVarRequirement < CWLObject
                     EnvironmentDef.load({
                                           'envName' => k,
                                           'envValue' => v,
-                                        })
+                                        }, dir)
                   }
                 else
                   defs.map{ |k, v|
@@ -1883,7 +1885,7 @@ class EnvVarRequirement < CWLObject
                     v.each{ |f, val|
                       d[f] = val
                     }
-                    EnvironmentDef.load(d)
+                    EnvironmentDef.load(d, dir)
                   }
                 end
               end
@@ -1908,16 +1910,16 @@ class EnvironmentDef < CWLObject
       obj.include? 'envValue'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @envName = obj['envName']
-    @envValue = Expression.load(obj['envValue'])
+    @envValue = Expression.load(obj['envValue'], dir)
   end
 
   def to_h
@@ -1936,7 +1938,7 @@ class ShellCommandRequirement < CWLObject
       obj.fetch('class', '') == 'ShellCommandRequirement'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -1963,67 +1965,67 @@ class ResourceRequirement < CWLObject
       obj.fetch('class', '') == 'ResourceRequirement'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
     @coresMin = if obj.include? 'coresMin'
                   if obj['coresMin'].instance_of? String
-                    Expression.load(obj['coresMin'])
+                    Expression.load(obj['coresMin'], dir)
                   else
                     obj['coresMin']
                   end
                 end
     @coresMax = if obj.include? 'coresMax'
                   if obj['coresMax'].instance_of? String
-                    Expression.load(obj['coresMax'])
+                    Expression.load(obj['coresMax'], dir)
                   else
                     obj['coresMax']
                   end
                 end
     @ramMin = if obj.include? 'ramMin'
                 if obj['ramMin'].instance_of? String
-                  Expression.load(obj['ramMin'])
+                  Expression.load(obj['ramMin'], dir)
                 else
                   obj['ramMin']
                 end
               end
     @ramMax = if obj.include? 'ramMax'
                 if obj['ramMax'].instance_of? String
-                  Expression.load(obj['ramMax'])
+                  Expression.load(obj['ramMax'], dir)
                 else
                   obj['ramMax']
                 end
               end
     @tmpdirMin = if obj.include? 'tmpdirMin'
                    if obj['tmpdirMin'].instance_of? String
-                     Expression.load(obj['tmpdirMin'])
+                     Expression.load(obj['tmpdirMin'], dir)
                    else
                      obj['tmpdirMin']
                    end
                  end
     @tmpdirMax = if obj.include? 'tmpdirMax'
                    if obj['tmpdirMax'].instance_of? String
-                     Expression.load(obj['tmpdirMax'])
+                     Expression.load(obj['tmpdirMax'], dir)
                    else
                      obj['tmpdirMax']
                    end
                  end
     @outdirMin = if obj.include? 'outdirMin'
                    if obj['outdirMin'].instance_of? String
-                     Expression.load(obj['outdirMin'])
+                     Expression.load(obj['outdirMin'], dir)
                    else
                      obj['outdirMin']
                    end
                  end
     @outdirMax = if obj.include? 'outdirMax'
                    if obj['outdirMax'].instance_of? String
-                     Expression.load(obj['outdirMax'])
+                     Expression.load(obj['outdirMax'], dir)
                    else
                      obj['outdirMax']
                    end
@@ -2162,7 +2164,7 @@ EOS
 end
 
 class Expression
-  def self.load(obj)
+  def self.load(obj, dir)
     Expression.new(obj)
   end
 
@@ -2243,7 +2245,7 @@ class CWLVersion
        'draft-4.dev3', 'v1.0.dev4', 'v1.0'].include? obj
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self}"
     end
@@ -2261,17 +2263,17 @@ class Workflow < CWLObject
       obj['class'] == 'Workflow'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @inputs = if obj['inputs'].instance_of? Array
                 obj['inputs'].map{ |o|
-                  InputParameter.load(o)
+                  InputParameter.load(o, dir)
                 }
               else
                 obj['inputs'].map{ |k, v|
@@ -2290,13 +2292,13 @@ class Workflow < CWLObject
                         }
                         o
                       end
-                  InputParameter.load(o)
+                  InputParameter.load(o, dir)
                 }
               end
 
     @outputs = if obj['outputs'].instance_of? Array
                  obj['outputs'].map{ |o|
-                   WorkflowOutputParameter.load(o)
+                   WorkflowOutputParameter.load(o, dir)
                  }
                else
                  obj['outputs'].map{ |k, v|
@@ -2315,13 +2317,13 @@ class Workflow < CWLObject
                          }
                          o
                        end
-                   WorkflowOutputParameter.load(o)
+                   WorkflowOutputParameter.load(o, dir)
                  }
                end
     @class_ = obj['class']
     @steps = if obj['steps'].instance_of? Array
                obj['steps'].map{ |s|
-                 WorkflowStep.load(s)
+                 WorkflowStep.load(s, dir)
                }
              else
                obj['steps'].map{ |k, v|
@@ -2330,7 +2332,7 @@ class Workflow < CWLObject
                  v.each{ |f, val|
                    o[f] = val
                  }
-                 WorkflowStep.load(o)
+                 WorkflowStep.load(o, dir)
                }
              end
     @id = obj.fetch('id', nil)
@@ -2347,7 +2349,7 @@ class Workflow < CWLObject
              }
            end
     @requirements = reqs.map{ |r|
-      self.class.load_requirement(r)
+      self.class.load_requirement(r, dir)
     }
 
     hints = if obj.fetch('hints', []).instance_of? Array
@@ -2363,7 +2365,7 @@ class Workflow < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h)
+      self.class.load_requirement(h, dir)
     }
 
     @label = obj.fetch('label', nil)
@@ -2371,36 +2373,36 @@ class Workflow < CWLObject
     @cwlVersion = obj.fetch('cwlVersion', nil)
   end
 
-  def self.load_requirement(req)
+  def self.load_requirement(req, dir)
     unless req.include? 'class'
       raise CWLParseError, 'Invalid requriment object'
     end
 
     case req['class']
     when 'InlineJavascriptRequirement'
-      InlineJavascriptRequirement.load(req)
+      InlineJavascriptRequirement.load(req, dir)
     when 'SchemaDefRequirement'
-      SchemaDefRequirement.load(req)
+      SchemaDefRequirement.load(req, dir)
     when 'DockerRequirement'
-      DockerRequirement.load(req)
+      DockerRequirement.load(req, dir)
     when 'SoftwareRequirement'
-      SoftwareRequirement.load(req)
+      SoftwareRequirement.load(req, dir)
     when 'InitialWorkDirRequirement'
-      InitialWorkDirRequirement.load(req)
+      InitialWorkDirRequirement.load(req, dir)
     when 'EnvVarRequirement'
-      EnvVarRequirement.load(req)
+      EnvVarRequirement.load(req, dir)
     when 'ShellCommandRequirement'
-      ShellCommandRequirement.load(req)
+      ShellCommandRequirement.load(req, dir)
     when 'ResourceRequirement'
-      ResourceRequirement.load(req)
+      ResourceRequirement.load(req, dir)
     when 'SubworkflowFeatureRequirement'
-      SubworkflowFeatureRequirement.load(req)
+      SubworkflowFeatureRequirement.load(req, dir)
     when 'ScatterFeatureRequirement'
-      ScatterFeatureRequirement.load(req)
+      ScatterFeatureRequirement.load(req, dir)
     when 'MultipleInputFeatureRequirement'
-      MultipleInputFeatureRequirement.load(req)
+      MultipleInputFeatureRequirement.load(req, dir)
     when 'StepInputExpressionRequirement'
-      StepInputExpressionRequirement.load(req)
+      StepInputExpressionRequirement.load(req, dir)
     else
       raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
@@ -2459,11 +2461,11 @@ class WorkflowOutputParameter < CWLObject
       ['id'].all?{ |f| obj.include? f }
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -2472,20 +2474,20 @@ class WorkflowOutputParameter < CWLObject
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
-                          Expression.load(sec)
+                          Expression.load(sec, dir)
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'])]
+                        [Expression.load(obj['secondaryFiles'], dir)]
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
              obj['doc'].instance_of?(Array) ? obj['doc'].join : obj['doc']
            end
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
     @format = if obj.include? 'format'
-                Expression.load(obj['format'])
+                Expression.load(obj['format'], dir)
               end
     @outputSource = if obj.fetch('outputSource', []).instance_of? Array
                       obj.fetch('outputSource', [])
@@ -2493,12 +2495,12 @@ class WorkflowOutputParameter < CWLObject
                       [obj['outputSource']]
                     end
     @linkMerge = if obj.include? 'linkMerge'
-                   LinkMergeMethod.load(obj['linkMerge'])
+                   LinkMergeMethod.load(obj['linkMerge'], dir)
                  else
-                   LinkMergeMethod.load('merge_nested')
+                   LinkMergeMethod.load('merge_nested', dir)
                  end
     @type = if obj.include? 'type'
-              CWLOutputType.load(obj['type'])
+              CWLOutputType.load(obj['type'], dir)
             end
   end
 
@@ -2549,7 +2551,7 @@ class WorkflowOutputParameter < CWLObject
 end
 
 class LinkMergeMethod
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj
     when 'merge_nested', 'merge_flattened'
       obj
@@ -2567,17 +2569,17 @@ class OutputRecordSchema < CWLObject
       obj.fetch('type', '') == 'record'
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
     @fields = obj.fetch('fields', []).map{ |f|
-      OutputRecordField.load(f)
+      OutputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
   end
@@ -2604,8 +2606,8 @@ class OutputRecordField < CWLObject
       obj.include?('type')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
   def initialize(obj)
@@ -2613,10 +2615,10 @@ class OutputRecordField < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @name = obj['name']
-    @type = CWLOutputType.load(obj['type'])
+    @type = CWLOutputType.load(obj['type'], dir)
     @doc = obj.fetch('doc', nil)
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
   end
 
@@ -2639,8 +2641,8 @@ class OutputEnumSchema < CWLObject
       obj.include?('type')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
   def initialize(obj)
@@ -2652,7 +2654,7 @@ class OutputEnumSchema < CWLObject
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
   end
 
@@ -2679,20 +2681,20 @@ class OutputArraySchema < CWLObject
       obj.include?('type')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @items = CWLOutputType.load(obj['items'])
+    @items = CWLOutputType.load(obj['items'], dir)
     @type = obj['type']
     @label = obj.fetch('label', nil)
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
   end
 
@@ -2721,11 +2723,11 @@ class WorkflowStep < CWLObject
       obj.include?('run')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -2733,7 +2735,7 @@ class WorkflowStep < CWLObject
     @id = obj['id']
     @in = if obj['in'].instance_of? Array
             obj['in'].map{ |o|
-              WorkflowStepInput.load(o)
+              WorkflowStepInput.load(o, dir)
             }
           else
             obj['in'].map{ |k, v|
@@ -2751,20 +2753,20 @@ class WorkflowStep < CWLObject
                     }
                     o
                   end
-              WorkflowStepInput.load(o)
+              WorkflowStepInput.load(o, dir)
             }
           end
     @out = obj['out'].map{ |o|
       if o.instance_of? String
-        WorkflowStepOutput.load({ 'id' => o,})
+        WorkflowStepOutput.load({ 'id' => o }, dir)
       else
-        WorkflowStepOutput.load(o)
+        WorkflowStepOutput.load(o, dir)
       end
     }
     @run = if obj['run'].instance_of? String
              obj['run']
            else
-             CommonWorkflowLanguage.load(obj['run'])
+             CommonWorkflowLanguage.load(obj['run'], dir)
            end
     reqs = if obj.fetch('requirements', []).instance_of? Array
              obj.fetch('requirements', [])
@@ -2779,7 +2781,7 @@ class WorkflowStep < CWLObject
              }
            end
     @requirements = reqs.map{ |r|
-      self.class.load_requirement(r)
+      self.class.load_requirement(r, dir)
     }
 
     hints = if obj.fetch('hints', []).instance_of? Array
@@ -2795,7 +2797,7 @@ class WorkflowStep < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h)
+      self.class.load_requirement(h, dir)
     }
 
     @label = obj.fetch('label', nil)
@@ -2806,40 +2808,40 @@ class WorkflowStep < CWLObject
                  [obj['scatter']]
                end
     @scatterMethod = if obj.include? 'scatterMethod'
-                       ScatterMethod.load(obj['scatterMethod'])
+                       ScatterMethod.load(obj['scatterMethod'], dir)
                      end
   end
 
-  def self.load_requirement(req)
+  def self.load_requirement(req, dir)
     unless req.include? 'class'
       raise CWLParseError, 'Invalid requriment object'
     end
 
     case req['class']
     when 'InlineJavascriptRequirement'
-      InlineJavascriptRequirement.load(req)
+      InlineJavascriptRequirement.load(req, dir)
     when 'SchemaDefRequirement'
-      SchemaDefRequirement.load(req)
+      SchemaDefRequirement.load(req, dir)
     when 'DockerRequirement'
-      DockerRequirement.load(req)
+      DockerRequirement.load(req, dir)
     when 'SoftwareRequirement'
-      SoftwareRequirement.load(req)
+      SoftwareRequirement.load(req, dir)
     when 'InitialWorkDirRequirement'
-      InitialWorkDirRequirement.load(req)
+      InitialWorkDirRequirement.load(req, dir)
     when 'EnvVarRequirement'
-      EnvVarRequirement.load(req)
+      EnvVarRequirement.load(req, dir)
     when 'ShellCommandRequirement'
-      ShellCommandRequirement.load(req)
+      ShellCommandRequirement.load(req, dir)
     when 'ResourceRequirement'
-      ResourceRequirement.load(req)
+      ResourceRequirement.load(req, dir)
     when 'SubworkflowFeatureRequirement'
-      SubworkflowFeatureRequirement.load(req)
+      SubworkflowFeatureRequirement.load(req, dir)
     when 'ScatterFeatureRequirement'
-      ScatterFeatureRequirement.load(req)
+      ScatterFeatureRequirement.load(req, dir)
     when 'MultipleInputFeatureRequirement'
-      MultipleInputFeatureRequirement.load(req)
+      MultipleInputFeatureRequirement.load(req, dir)
     when 'StepInputExpressionRequirement'
-      StepInputExpressionRequirement.load(req)
+      StepInputExpressionRequirement.load(req, dir)
     else
       raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
@@ -2889,11 +2891,11 @@ class WorkflowStepInput < CWLObject
       obj.include?('id')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -2905,15 +2907,15 @@ class WorkflowStepInput < CWLObject
                 [obj['source']]
               end
     @linkMerge = if obj.include? 'linkMerge'
-                   LinkMergeMethod.load(obj['linkMerge'])
+                   LinkMergeMethod.load(obj['linkMerge'], dir)
                  else
-                   LinkMergeMethod.load('merge_nested')
+                   LinkMergeMethod.load('merge_nested', dir)
                  end
     @default = if obj.include? 'default'
-                 InputParameter.parse_object(nil, obj['default'])
+                 InputParameter.parse_object(nil, obj['default'], dir)
                end
     @valueFrom = if obj.include? 'valueFrom'
-                   Expression.load(obj['valueFrom'])
+                   Expression.load(obj['valueFrom'], dir)
                  end
   end
 
@@ -2944,7 +2946,7 @@ class WorkflowStepOutput < CWLObject
       obj.include?('id')
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -2963,7 +2965,7 @@ class WorkflowStepOutput < CWLObject
 end
 
 class ScatterMethod
-  def self.load(obj)
+  def self.load(obj, dir)
     case obj
     when 'dotproduct', 'nested_crossproduct', 'flat_crossproduct'
       obj
@@ -2981,7 +2983,7 @@ class SubworkflowFeatureRequirement < CWLObject
       obj.fetch('class', '') == 'SubworkflowFeatureRequirement'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -3007,7 +3009,7 @@ class ScatterFeatureRequirement < CWLObject
       obj.fetch('class', '') == 'ScatterFeatureRequirement'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -3033,7 +3035,7 @@ class MultipleInputFeatureRequirement < CWLObject
       obj.fetch('class', '') == 'MultipleInputFeatureRequirement'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -3059,7 +3061,7 @@ class StepInputExpressionRequirement < CWLObject
       obj.fetch('class', '') == 'StepInputExpressionRequirement'
   end
 
-  def self.load(obj)
+  def self.load(obj, dir)
     self.new(obj)
   end
 
@@ -3090,17 +3092,17 @@ class ExpressionTool < CWLObject
       obj.include?('expression')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @inputs = if obj['inputs'].instance_of? Array
                 obj['inputs'].map{ |o|
-                  InputParameter.load(o)
+                  InputParameter.load(o, dir)
                 }
               else
                 obj['inputs'].map{ |k, v|
@@ -3119,12 +3121,12 @@ class ExpressionTool < CWLObject
                         }
                         o
                       end
-                  InputParameter.load(o)
+                  InputParameter.load(o, dir)
                 }
               end
     @outputs = if obj['outputs'].instance_of? Array
                 obj['outputs'].map{ |o|
-                  ExpressionToolOutputParameter.load(o)
+                  ExpressionToolOutputParameter.load(o, dir)
                 }
               else
                 obj['outputs'].map{ |k, v|
@@ -3143,11 +3145,11 @@ class ExpressionTool < CWLObject
                         }
                         o
                       end
-                  ExpressionToolOutputParameter.load(o)
+                  ExpressionToolOutputParameter.load(o, dir)
                 }
                end
     @class_ = obj['class']
-    @expression = Expression.load(obj['expression'])
+    @expression = Expression.load(obj['expression'], dir)
     @id = obj.fetch('id', nil)
     reqs = if obj.fetch('requirements', []).instance_of? Array
              obj.fetch('requirements', [])
@@ -3162,7 +3164,7 @@ class ExpressionTool < CWLObject
              }
            end
     @requirements = reqs.map{ |r|
-      self.class.load_requirement(r)
+      self.class.load_requirement(r, dir)
     }
 
     hints = if obj.fetch('hints', []).instance_of? Array
@@ -3178,43 +3180,43 @@ class ExpressionTool < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h)
+      self.class.load_requirement(h, dir)
     }
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
     @cwlVersion = obj.fetch('cwlVersion', nil)
   end
 
-  def self.load_requirement(req)
+  def self.load_requirement(req, dir)
     unless req.include? 'class'
       raise CWLParseError, 'Invalid requriment object'
     end
 
     case req['class']
     when 'InlineJavascriptRequirement'
-      InlineJavascriptRequirement.load(req)
+      InlineJavascriptRequirement.load(req, dir)
     when 'SchemaDefRequirement'
-      SchemaDefRequirement.load(req)
+      SchemaDefRequirement.load(req, dir)
     when 'DockerRequirement'
-      DockerRequirement.load(req)
+      DockerRequirement.load(req, dir)
     when 'SoftwareRequirement'
-      SoftwareRequirement.load(req)
+      SoftwareRequirement.load(req, dir)
     when 'InitialWorkDirRequirement'
-      InitialWorkDirRequirement.load(req)
+      InitialWorkDirRequirement.load(req, dir)
     when 'EnvVarRequirement'
-      EnvVarRequirement.load(req)
+      EnvVarRequirement.load(req, dir)
     when 'ShellCommandRequirement'
-      ShellCommandRequirement.load(req)
+      ShellCommandRequirement.load(req, dir)
     when 'ResourceRequirement'
-      ResourceRequirement.load(req)
+      ResourceRequirement.load(req, dir)
     when 'SubworkflowFeatureRequirement'
-      SubworkflowFeatureRequirement.load(req)
+      SubworkflowFeatureRequirement.load(req, dir)
     when 'ScatterFeatureRequirement'
-      ScatterFeatureRequirement.load(req)
+      ScatterFeatureRequirement.load(req, dir)
     when 'MultipleInputFeatureRequirement'
-      MultipleInputFeatureRequirement.load(req)
+      MultipleInputFeatureRequirement.load(req, dir)
     when 'StepInputExpressionRequirement'
-      StepInputExpressionRequirement.load(req)
+      StepInputExpressionRequirement.load(req, dir)
     else
       raise CWLParseError, "Invalid requirement: #{req['class']}"
     end
@@ -3265,11 +3267,11 @@ class InputParameter < CWLObject
       obj.include?('id')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -3278,10 +3280,10 @@ class InputParameter < CWLObject
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
-                          Expression.load(sec)
+                          Expression.load(sec, dir)
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'])]
+                        [Expression.load(obj['secondaryFiles'], dir)]
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
@@ -3289,22 +3291,22 @@ class InputParameter < CWLObject
            end
     @format = if obj.fetch('format', []).instance_of? Array
                 obj.fetch('format', []).map{ |f|
-                  Expression.load(f)
+                  Expression.load(f, dir)
                 }
               else
-                [Expression.load(obj['format'])]
+                [Expression.load(obj['format'], dir)]
               end
     @inputBinding = if obj.include? 'inputBinding'
-                      CommandLineBinding.load(obj['inputBinding'])
+                      CommandLineBinding.load(obj['inputBinding'], dir)
                     end
     @type = if obj.include? 'type'
-              CWLInputType.load(obj['type'])
+              CWLInputType.load(obj['type'], dir)
             end
     @default = if obj.include? 'default'
                  if @type.nil?
                    raise CWLParseError, 'Unsupported format: `default` without `type`'
                  end
-                 InputParameter.parse_object(@type, obj['default'])
+                 InputParameter.parse_object(@type, obj['default'], dir)
                end
   end
 
@@ -3350,11 +3352,11 @@ class ExpressionToolOutputParameter < CWLObject
       obj.include?('id')
   end
 
-  def self.load(obj)
-    self.new(obj)
+  def self.load(obj, dir)
+    self.new(obj, dir)
   end
 
-  def initialize(obj)
+  def initialize(obj, dir)
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -3363,23 +3365,23 @@ class ExpressionToolOutputParameter < CWLObject
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
-                          Expression.load(sec)
+                          Expression.load(sec, dir)
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'])]
+                        [Expression.load(obj['secondaryFiles'], dir)]
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
              obj['doc'].instance_of?(Array) ? obj['doc'].join : obj['doc']
            end
     @outputBinding = if obj.include? 'outputBinding'
-                       CommandOutputBinding.load(obj['outputBinding'])
+                       CommandOutputBinding.load(obj['outputBinding'], dir)
                      end
     @format = if obj.include? 'format'
-                Expression.load(obj['format'])
+                Expression.load(obj['format'], dir)
               end
     @type = if obj.include? 'type'
-              CWLOutputType.load(obj['type'])
+              CWLOutputType.load(obj['type'], dir)
             end
   end
 
@@ -3414,7 +3416,7 @@ class ExpressionToolOutputParameter < CWLObject
 end
 
 class InputParameter
-  def self.parse_object(type, obj)
+  def self.parse_object(type, obj, dir)
     if type.nil?
       type = guess_type(obj)
     end
@@ -3448,9 +3450,9 @@ class InputParameter
         end
         obj
       when 'File'
-        CWLFile.load(obj)
+        CWLFile.load(obj, dir)
       when 'Directory'
-        Directory.load(obj)
+        Directory.load(obj, dir)
       end
     when CommandInputRecordSchema
       raise CWLParseError, "Unsupported type: #{type.class}"
@@ -3460,12 +3462,12 @@ class InputParameter
         raise CWLInspectionError, "Invalid value: array of #{t} is expected"
       end
       obj.map{ |o|
-        self.parse_object(t, obj)
+        self.parse_object(t, obj, dir)
       }
     when CommandInputUnionSchema
       idx = type.types.find_index{ |ty|
         begin
-          self.parse_object(ty, obj)
+          self.parse_object(ty, obj, dir)
           true
         rescue CWLInspectionError
           false
@@ -3496,15 +3498,15 @@ end
 def guess_type(value)
   case value
   when nil
-    CWLType.load('null')
+    CWLType.load('null', nil)
   when TrueClass, FalseClass
-    CWLType.load('boolean')
+    CWLType.load('boolean', nil)
   when Integer
-    CWLType.load('int')
+    CWLType.load('int', nil)
   when Float
-    CWLType.load('float')
+    CWLType.load('float', nil)
   when String
-    CWLType.load('string')
+    CWLType.load('string', nil)
   when Hash
     case value.fetch('class', nil)
     when 'File'
@@ -3518,7 +3520,7 @@ def guess_type(value)
     CommandInputArraySchema.load({
                                    'type' => 'array',
                                    'items' => guess_type(value.first).to_h,
-                                 })
+                                 }, nil)
   else
     raise CWLInspectionError, "Unsupported value: #{value}"
   end
