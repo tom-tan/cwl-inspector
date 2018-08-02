@@ -76,7 +76,7 @@ class ECMAScriptParser < Parslet::Parser
       string_literal
   }
   rule(:identifier) {
-    reserved_word.absent? >> identifier_name
+    identifier_name # but not reserved_word
   }
   rule(:identifier_name) {
     # identifier_start |
