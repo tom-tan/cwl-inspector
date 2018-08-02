@@ -605,7 +605,7 @@ if $0 == __FILE__
           when 'ExpressionTool'
             obj = cwl.expression.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                                           inputs, runtime)
-            "echo '#{JSON.dump(obj).gsub("'", "\\'")}' > #{File.join(runtime['outdir'], 'cwl.output.json')}"
+            "echo '#{JSON.dump(obj).gsub("'"){ "\\'" }}' > #{File.join(runtime['outdir'], 'cwl.output.json')}"
           else
             raise CWLInspectionError, "`commandline` does not support #{walk(cwl, '.class')} class"
           end
