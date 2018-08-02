@@ -685,7 +685,7 @@ class CWLOutputType
          'string', 'File', 'Directory'
       CWLType.load(obj)
     else
-      raise CWLParseError, "Unimplemented type: #{obj}"
+      raise CWLParseError, "Unimplemented type: #{obj.to_h}"
     end
   end
 end
@@ -3407,7 +3407,7 @@ class ExpressionToolOutputParameter < CWLObject
       ret['format'] = @format.to_h
     end
     unless @type.nil?
-      ret['type'] = @type
+      ret['type'] = @type.to_h
     end
     ret
   end
