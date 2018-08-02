@@ -1214,7 +1214,9 @@ class CommandOutputBinding < CWLObject
     end
 
     @glob = if obj.fetch('glob', []).instance_of? Array
-              obj.fetch('glob', [])
+              obj.fetch('glob', []).map{ |g|
+                Expression.load(g)
+              }
             else
               [Expression.load(obj['glob'])]
             end
