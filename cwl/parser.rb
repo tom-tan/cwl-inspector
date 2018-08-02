@@ -2754,7 +2754,7 @@ class WorkflowStep < CWLObject
           end
     @out = obj['out'].map{ |o|
       if o.instance_of? String
-        WorkflowStepInput.load({ 'id' => o,})
+        WorkflowStepOutput.load({ 'id' => o,})
       else
         WorkflowStepOutput.load(o)
       end
