@@ -646,7 +646,7 @@ class CWLCommandInputType
     when /^(.+)\[\]$/
       CommandInputArraySchema.load({
                                      'type' => 'array',
-                                     'items' => self.load($1),
+                                     'items' => $1,
                                    })
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
          'string', 'File', 'Directory'
