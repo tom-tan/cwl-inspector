@@ -599,10 +599,15 @@ if $0 == __FILE__
         when /^keys\((\..*)\)$/
           fmt.call keys(cwl, $1)
         when 'commandline'
-          if walk(cwl, '.class') != 'CommandLineTool'
+          case walk(cwl, '.class')
+          when 'CommandLineTool'
+            commandline(cwl, runtime, inputs)
+          when 'ExpressionTool'
+            cwl.expression.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                    inputs, runtime)
+          else
             raise CWLInspectionError, "`commandline` does not support #{walk(cwl, '.class')} class"
           end
-          commandline(cwl, runtime, inputs)
         when 'list'
           if walk(cwl, '.class') != 'CommandLineTool'
             raise CWLInspectionError, "`list` does not support #{walk(cwl, '.class')} class"
