@@ -805,7 +805,7 @@ class CWLFile < CWLObject
     file.dirname = File.dirname file.path
     file.nameext = File.extname file.path
     file.nameroot = File.basename file.path, file.nameext
-    if strict
+    if File.exist? file.path
       digest = Digest::SHA1.hexdigest(File.open(file.path, 'rb').read)
       file.checksum = "sha1$#{digest}"
       file.size = File.size(file.path)
