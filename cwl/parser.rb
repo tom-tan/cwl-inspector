@@ -744,7 +744,7 @@ class CWLFile < CWLObject
 
   def initialize(obj, dir)
     unless self.class.valid?(obj)
-      raise CWLParseError, "Cannot parse as #{self.class}"
+      raise CWLParseError, "Cannot parse #{obj} as #{self.class}"
     end
     @class_ = obj['class']
     @location = obj.fetch('location', nil)
