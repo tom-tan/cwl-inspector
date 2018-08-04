@@ -885,7 +885,7 @@ class Directory < CWLObject
       if @listing.empty?
         raise CWLInspectionError, "`path`, `location` or `listing` fields is necessary for Directory object: #{self}"
       end
-      raise CWLInspectionError, "Unsupported"
+      raise CWLInspectionError, "Dir.listing is currently unsupported"
     end
 
     dir.location, dir.path = if location.match %r|^(.+:)//(.+)$|
