@@ -3469,7 +3469,7 @@ class InputParameter
         begin
           self.parse_object(ty, obj, dir)
           true
-        rescue CWLInspectionError
+        rescue CWLInspectionError, CWLParseError
           false
         end
       }
@@ -3477,7 +3477,7 @@ class InputParameter
         raise CWLParseError, "Invalid object: #{obj}"
       end
       CWLUnionValue.new(type.types[idx],
-                        self.parse_object(type.types[idx], obj))
+                        self.parse_object(type.types[idx], obj, dir))
     end
   end
 end
