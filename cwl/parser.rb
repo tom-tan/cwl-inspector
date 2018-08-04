@@ -616,7 +616,7 @@ class CWLInputType
                               'items' => $1,
                             }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
-         'string', 'File', 'Directory'
+         'string', 'File', 'Directory', 'Any'
       CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
@@ -649,7 +649,7 @@ class CWLCommandInputType
                                      'items' => $1,
                                    }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
-         'string', 'File', 'Directory'
+         'string', 'File', 'Directory', 'Any'
       CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
@@ -682,7 +682,7 @@ class CWLOutputType
                                'items' => $1,
                              }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
-         'string', 'File', 'Directory'
+         'string', 'File', 'Directory', 'Any'
       CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj.to_h}"
@@ -715,7 +715,7 @@ class CWLCommandOutputType
                                      'items' => $1,
                                    }, dir)
     when 'null', 'boolean', 'int', 'long', 'float', 'double',
-         'string', 'File', 'Directory'
+         'string', 'File', 'Directory', 'Any'
       CWLType.load(obj, dir)
     else
       raise CWLParseError, "Unimplemented type: #{obj}"
@@ -3417,7 +3417,7 @@ end
 
 class InputParameter
   def self.parse_object(type, obj, dir)
-    if type.nil?
+    if type.nil? or (type.instance_of?(CWLType) and type.type == 'Any')
       type = guess_type(obj)
     end
 
