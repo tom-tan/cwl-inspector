@@ -3426,27 +3426,27 @@ class InputParameter
       case type.type
       when 'null'
         unless obj.nil?
-          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
         end
         obj
       when 'boolean'
         unless obj == true or obj == false
-          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
         end
         obj
       when 'int', 'long'
         unless obj.instance_of? Integer
-          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
         end
         obj
       when 'float', 'double'
         unless obj.instance_of? Float
-          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
         end
         obj
       when 'string'
         unless obj.instance_of? String
-          raise CWLParseError, "Invalid value: #{obj} but #{type.type} is expected"
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
         end
         obj
       when 'File'
@@ -3469,7 +3469,7 @@ class InputParameter
         begin
           self.parse_object(ty, obj, dir)
           true
-        rescue CWLInspectionError, CWLParseError
+        rescue CWLInspectionError
           false
         end
       }
