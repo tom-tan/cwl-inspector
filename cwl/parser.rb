@@ -786,7 +786,7 @@ class CWLFile < CWLObject
                                  case scheme
                                  when 'file:'
                                    unless File.exist? path
-                                     raise CWLInspectionError, "File not found: #{location}"
+                                     raise CWLInspectionError, "File not found: #{location}" if strict
                                    end
                                    [location, path]
                                  when 'http:', 'https:', 'ftp:'
