@@ -3462,7 +3462,7 @@ class InputParameter
         raise CWLInspectionError, "Invalid value: array of #{t} is expected"
       end
       obj.map{ |o|
-        self.parse_object(t, obj, dir)
+        self.parse_object(t, o, dir)
       }
     when CommandInputUnionSchema
       idx = type.types.find_index{ |ty|
@@ -3510,9 +3510,9 @@ def guess_type(value)
   when Hash
     case value.fetch('class', nil)
     when 'File'
-      CWLType.load('File')
+      CWLType.load('File', nil)
     when 'Direcotry'
-      CWLType.load('Directory')
+      CWLType.load('Directory', nil)
     else
       raise CWLInspectionError, "Unsupported value: #{value}"
     end
