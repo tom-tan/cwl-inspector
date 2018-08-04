@@ -342,6 +342,10 @@ def parse_inputs(cwl, inputs, runtime, strict = true)
 end
 
 def parse_object(id, type, obj, default, loadContents, runtime, strict)
+  if type.nil? or (type.instance_of?(CWLType) and type.type == 'Any')
+    type = guess_type(obj)
+  end
+
   case type
   when CWLType
     case type.type
