@@ -292,12 +292,12 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   hints = walk(cwl, '.hints.ResourceRequirement')
 
   # cores
-  coresMin = (reqs and reqs.coresMin) or (hints and hints.coresMin)
+  coresMin = ((reqs and reqs.coresMin) or (hints and hints.coresMin))
   if coresMin.instance_of? Expression
     coresMin = coresMin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                                  inputs, runtime, nil)
   end
-  coresMax = (reqs and reqs.coresMax) or (hints and hints.coresMax)
+  coresMax = ((reqs and reqs.coresMax) or (hints and hints.coresMax))
   if coresMax.instance_of? Expression
     coresMax = coresMax.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                                  inputs, runtime, nil)
@@ -314,12 +314,12 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
                      end
 
   # mem
-  ramMin = (reqs and reqs.ramMin) or (hints and hints.ramMin)
+  ramMin = ((reqs and reqs.ramMin) or (hints and hints.ramMin))
   if ramMin.instance_of? Expression
     ramMin = ramMin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                              inputs, runtime, nil)
   end
-  ramMax = (reqs and reqs.ramMax) or (hints and hints.ramMax)
+  ramMax = ((reqs and reqs.ramMax) or (hints and hints.ramMax))
   if ramMax.instance_of? Expression
     ramMax = ramMax.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                              inputs, runtime, nil)
