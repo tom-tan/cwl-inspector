@@ -274,14 +274,34 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   ].compact.join(' ')
 end
 
-def eval_runtime(cwl, outdir, tmpdir)
-  runtime = {}
-  reqs = walk(cwl, '.requirements.ResourceRequirement', {}).to_h
-  hints = walk(cwl, '.hints.ResourceRequirement', {}).to_h
+def eval_runtime(cwl, inputs, outdir, tmpdir)
+  runtime = {
+    'tmpdir' => tmpdir,
+    'outdir' => outdir,
+    'docdir' => [
+      cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
+      '/usr/share/commonwl',
+      '/usr/local/share/commonwl',
+      File.join(ENV.fetch('XDG_DATA_HOME',
+                          File.join(ENV['HOME'], '.local', 'share')),
+                'commonwl'),
+    ],
+  }
+
+  reqs = walk(cwl, '.requirements.ResourceRequirement')
+  hints = walk(cwl, '.hints.ResourceRequirement')
 
   # cores
-  coresMin = reqs.fetch('coresMin', hints.fetch('coresMin', nil))
-  coresMax = reqs.fetch('coresMax', hints.fetch('coresMax', nil))
+  coresMin = (reqs and reqs.coresMin) or (hints and hints.coresMin)
+  if coresMin.instance_of? Expression
+    coresMin = coresMin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                 inputs, runtime, nil)
+  end
+  coresMax = (reqs and reqs.coresMax) or (hints and hints.coresMax)
+  if coresMax.instance_of? Expression
+    coresMax = coresMax.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                                 inputs, runtime, nil)
+  end
   raise "Invalid ResourceRequirement" if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
   coresMin = coresMax if coresMin.nil?
   coresMax = coresMin if coresMax.nil?
@@ -294,8 +314,16 @@ def eval_runtime(cwl, outdir, tmpdir)
                      end
 
   # mem
-  ramMin = reqs.fetch('ramMin', hints.fetch('ramMin', nil))
-  ramMax = reqs.fetch('ramMax', hints.fetch('ramMax', nil))
+  ramMin = (reqs and reqs.ramMin) or (hints and hints.ramMin)
+  if ramMin.instance_of? Expression
+    ramMin = ramMin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                             inputs, runtime, nil)
+  end
+  ramMax = (reqs and reqs.ramMax) or (hints and hints.ramMax)
+  if ramMax.instance_of? Expression
+    ramMax = ramMax.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                             inputs, runtime, nil)
+  end
   raise "Invalid ResourceRequirement" if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
   ramMin = ramMax if ramMin.nil?
   ramMax = ramMin if ramMax.nil?
@@ -306,19 +334,10 @@ def eval_runtime(cwl, outdir, tmpdir)
                      raise "Invalid ResourceRequirement" if ram < ramMin
                      [ram, ramMax].min
                    end
-  runtime['tmpdir'] = tmpdir
-  runtime['outdir'] = outdir
-  runtime['docdir'] = [
-    cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
-    '/usr/share/commonwl',
-    '/usr/local/share/commonwl',
-    File.join(ENV.fetch('XDG_DATA_HOME', File.join(ENV['HOME'], '.local', 'share')), 'commonwl'),
-  ]
-
   runtime
 end
 
-def parse_inputs(cwl, inputs, runtime, strict = true)
+def parse_inputs(cwl, inputs, docdir, strict = true)
   input_not_required = walk(cwl, '.inputs', []).all?{ |inp|
     (inp.type.class == CommandInputUnionSchema and
       inp.type.types.find_index{ |obj|
@@ -336,12 +355,12 @@ def parse_inputs(cwl, inputs, runtime, strict = true)
     Hash[walk(cwl, '.inputs', []).map{ |inp|
            [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
                                  inp.default, walk(inp, '.inputBinding.loadContents', false),
-                                 runtime, strict)]
+                                 docdir, strict)]
          }]
   end
 end
 
-def parse_object(id, type, obj, default, loadContents, runtime, strict)
+def parse_object(id, type, obj, default, loadContents, docdir, strict)
   if type.nil?
     type = guess_type(obj)
   elsif type.instance_of?(CWLType) and type.type == 'Any'
@@ -387,19 +406,19 @@ def parse_object(id, type, obj, default, loadContents, runtime, strict)
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
-      file = obj.nil? ? default : CWLFile.load(obj, runtime['docdir'].first)
-      file.evaluate(runtime, loadContents, strict)
+      file = obj.nil? ? default : CWLFile.load(obj, docdir)
+      file.evaluate(docdir, loadContents, strict)
     when 'Directory'
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
-      dir = obj.nil? ? default : Directory.load(obj, runtime['docdir'].first)
-      dir.evaluate(runtime, nil, strict)
+      dir = obj.nil? ? default : Directory.load(obj, docdir)
+      dir.evaluate(docdir, nil, strict)
     end
   when CommandInputUnionSchema
     idx = type.types.find_index{ |t|
       begin
-        parse_object(id, t, obj, default, loadContents, runtime, strict)
+        parse_object(id, t, obj, default, loadContents, docdir, strict)
         true
       rescue CWLInspectionError
         false
@@ -410,7 +429,7 @@ def parse_object(id, type, obj, default, loadContents, runtime, strict)
     end
     CWLUnionValue.new(type.types[idx],
                       parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
-                                   loadContents, runtime, strict))
+                                   loadContents, docdir, strict))
   when CommandInputRecordSchema
     raise CWLInspectionError, "Unsupported input type: #{type.class}"
     # unless obj.instance_of? Hash
@@ -435,7 +454,7 @@ def parse_object(id, type, obj, default, loadContents, runtime, strict)
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
     end
     obj.map{ |o|
-      parse_object(id, t, o, nil, loadContents, runtime, strict)
+      parse_object(id, t, o, nil, loadContents, docdir, strict)
     }
   else
     raise CWLInspectionError, "Unsupported type: #{type.class}"
@@ -476,7 +495,7 @@ def list_(cwl, output, runtime, inputs)
                           'class' => 'File',
                           'location' => 'file://'+location,
                         }, runtime['docdir'].first)
-    File.exist?(location) ? file.evaluate(runtime, false) : file
+    File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   when Stderr
     fname = walk(cwl, '.stderr')
     evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
@@ -491,7 +510,7 @@ def list_(cwl, output, runtime, inputs)
                           'class' => 'File',
                           'location' => 'file://'+location,
                         }, runtime['docdir'].first)
-    File.exist?(location) ? file.evaluate(runtime, false) : file
+    File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   else
     obj = walk(cwl, ".outputs.#{output.id}")
     oBinding = obj.outputBinding
@@ -516,7 +535,7 @@ def list_(cwl, output, runtime, inputs)
       }
     }.flatten.map{ |f|
       if File.exist? f.location.sub(%r|^file://|, '')
-        f.evaluate(runtime, loadContents)
+        f.evaluate(runtime['docdir'].first, loadContents)
       else
         f
       end
@@ -536,7 +555,7 @@ def list_(cwl, output, runtime, inputs)
     elsif obj.type.instance_of?(CommandOutputArraySchema) and
          (obj.type.items == 'File' or obj.type.items == 'Directory')
       evaled.map{ |f|
-        f.evaluate(runtime, false)
+        f.evaluate(runtime['docdir'].first, false)
       }
     else
       evaled
@@ -599,8 +618,10 @@ if $0 == __FILE__
         else
           CommonWorkflowLanguage.load_file(file)
         end
-  runtime = eval_runtime(file, outdir, tmpdir)
-  inputs = parse_inputs(cwl, inp_obj, runtime, strict)
+  inputs = parse_inputs(cwl, inp_obj,
+                        cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
+                        strict)
+  runtime = eval_runtime(file, inputs, outdir, tmpdir)
 
   ret = case cmd
         when /^\..*/

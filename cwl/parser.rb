@@ -739,7 +739,7 @@ class CWLFile < CWLObject
 
   def self.load(obj, dir)
     file = self.new(obj, dir)
-    file.evaluate({ 'docdir' => [dir] }, false, false)
+    file.evaluate(dir, false, false)
   end
 
   def initialize(obj, dir)
@@ -769,7 +769,7 @@ class CWLFile < CWLObject
     @contents = nil
   end
 
-  def evaluate(runtime, loadContents = false, strict = true)
+  def evaluate(docdir, loadContents = false, strict = true)
     file = self.dup
     location = @location.nil? ? @path : @location
     if location.nil?
@@ -795,7 +795,7 @@ class CWLFile < CWLObject
                                    raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                  end
                                else
-                                 path = File.expand_path(location, runtime['docdir'].first)
+                                 path = File.expand_path(location, docdir)
                                  unless File.exist? path
                                    raise CWLInspectionError, "File not found: file://#{path}" if strict
                                  end
@@ -811,7 +811,7 @@ class CWLFile < CWLObject
       file.size = File.size(file.path)
     end
     file.secondaryFiles = @secondaryFiles.map{ |sf|
-      sf.evaluate(runtime, loadContents, strict)
+      sf.evaluate(docdir, loadContents, strict)
     }
     file.contents = if @contents
                       @contents
@@ -855,7 +855,7 @@ class Directory < CWLObject
 
   def self.load(obj, dir)
     d = self.new(obj, dir)
-    d.evaluate({ 'docdir' => [dir] }, false, false)
+    d.evaluate(dir, false, false)
   end
 
   def initialize(obj, dir)
@@ -878,40 +878,42 @@ class Directory < CWLObject
     }
   end
 
-  def evaluate(runtime, loadContents = false, strict = true)
+  def evaluate(docdir, loadContents = false, strict = true)
     dir = self.dup
     location = @location.nil? ? @path : @location
     if @location.nil?
       if @listing.empty?
         raise CWLInspectionError, "`path`, `location` or `listing` fields is necessary for Directory object: #{self}"
       end
-      raise CWLInspectionError, "Dir.listing is currently unsupported"
     end
 
-    dir.location, dir.path = if location.match %r|^(.+:)//(.+)$|
-                               scheme, path = $1, $2
-                               case scheme
-                               when 'file:'
-                                 unless Dir.exist? path
-                                   raise CWLInspectionError, "Directory not found: #{location}"
+    if location
+      dir.location, dir.path = if location.match %r|^(.+:)//(.+)$|
+                                 scheme, path = $1, $2
+                                 case scheme
+                                 when 'file:'
+                                   unless Dir.exist? path
+                                     raise CWLInspectionError, "Directory not found: #{location}"
+                                   end
+                                   [location, path]
+                                 when 'http:', 'https:', 'ftp:'
+                                   raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                                 else
+                                   raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                  end
-                                 [location, path]
-                               when 'http:', 'https:', 'ftp:'
-                                 raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                else
-                                 raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                                 unless Dir.exist? location
+                                   raise CWLInspectionError, "Directory not found: #{location}" if strict
+                                 end
+                                 path = File.expand_path(location, docdir)
+                                 ['file://'+path, path]
                                end
-                             else
-                               unless Dir.exist? location
-                                 raise CWLInspectionError, "Directory not found: #{location}" if strict
-                               end
-                               path = File.expand_path(location, runtime['docdir'].first)
-                               ['file://'+path, path]
-                             end
-    dir.basename = File.basename dir.path
+      dir.basename = File.basename dir.path
+    end
     dir.listing = @listing.map{ |lst|
-      lst.evaluate(runtime, loadContents, strict)
+      lst.evaluate(docdir, loadContents, strict)
     }
+    dir
   end
 
   def to_h
