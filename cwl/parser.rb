@@ -1492,6 +1492,34 @@ class SchemaDefRequirement < CWLObject
   end
 end
 
+class InputUnionSchema < CWLObject
+  attr_reader :types
+
+  def self.load(obj, dir)
+    self.new(obj, dir)
+  end
+
+  def initialize(obj, dir)
+    unless obj.instance_of? Array
+      raise CWLParseError, "Cannot parse as #{self.class}"
+    end
+
+    @types = obj.map{ |o|
+      CWLInputType.load(o, dir)
+    }
+  end
+
+  def walk(path)
+    @types.walk(path)
+  end
+
+  def to_h
+    @types.map{ |t|
+      t.to_h
+    }
+  end
+end
+
 class InputRecordSchema < CWLObject
   cwl_object_preamble :type, :fields, :label
 
