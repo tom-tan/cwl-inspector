@@ -376,7 +376,7 @@ class CommandLineTool < CWLObject
               else
                 nil
               end
-    @successCodes = obj.fetch('successCodes', [])
+    @successCodes = obj.fetch('successCodes', [0])
     @temporaryFailCodes = obj.fetch('temporaryFailCodes', [])
     @permanentFailCodes = obj.fetch('permanentFailCodes', [])
   end
