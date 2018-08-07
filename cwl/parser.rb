@@ -2963,7 +2963,7 @@ class WorkflowStepInput < CWLObject
       ret['linkMerge'] = @linkMerge
     end
     unless @default.nil?
-      ret['default'] = @default
+      ret['default'] = @default.to_h
     end
     unless @valueFrom.nil?
       ret['valueFrom'] = @valueFrom.to_h
