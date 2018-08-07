@@ -2196,7 +2196,6 @@ EOS
     e = kind == :expression ? "$(#{expression})" : "${#{expression}}"
     raise CWLInspectionError, "#{ret['message']} in expression '#{e}'"
   end
-  # parse object
   ret
 end
 
