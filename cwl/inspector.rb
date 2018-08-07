@@ -139,7 +139,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
     tmp = pre ? [pre, name] : [name]
     walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
   else
-    type = if type.nil?
+    type = if type.nil? or (type.instance_of?(CWLType) and type.type == 'Any')
              guess_type(value)
            else
              type
