@@ -2703,13 +2703,14 @@ class OutputArraySchema < CWLObject
   def to_h
     ret = {}
     ret['items'] = @items.to_h
-    ret['type'] = @type
+    ret['type'] = @type.to_h
     unless @label.nil?
       ret['label'] = @label
     end
     unless @outputBinding.nil?
       ret['outputBinding'] = @outputBinding.to_h
     end
+    ret
   end
 end
 
