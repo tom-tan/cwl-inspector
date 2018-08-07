@@ -3457,9 +3457,9 @@ class InputParameter
       when 'Directory'
         Directory.load(obj, dir)
       end
-    when CommandInputRecordSchema
+    when CommandInputRecordSchema, InputRecordSchema
       raise CWLParseError, "Unsupported type: #{type.class}"
-    when CommandInputArraySchema
+    when CommandInputArraySchema, InputArraySchema
       t = type.items
       unless obj.instance_of? Array
         raise CWLInspectionError, "Invalid value: array of #{t} is expected"
@@ -3467,7 +3467,7 @@ class InputParameter
       obj.map{ |o|
         self.parse_object(t, o, dir)
       }
-    when CommandInputUnionSchema
+    when CommandInputUnionSchema, InputUnionSchema
       idx = type.types.find_index{ |ty|
         begin
           self.parse_object(ty, obj, dir)
