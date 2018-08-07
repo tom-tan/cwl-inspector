@@ -67,6 +67,10 @@ class NilClass
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
   end
+
+  def to_h
+    nil
+  end
 end
 
 class Integer
