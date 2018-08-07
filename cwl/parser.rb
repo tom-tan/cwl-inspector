@@ -348,7 +348,7 @@ class CommandLineTool < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h, dir)
+      self.class.load_requirement(h, dir, true)
     }
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
@@ -385,9 +385,13 @@ class CommandLineTool < CWLObject
     @permanentFailCodes = obj.fetch('permanentFailCodes', [])
   end
 
-  def self.load_requirement(req, dir)
+  def self.load_requirement(req, dir, hints = false)
     unless req.include? 'class'
-      raise CWLParseError, 'Invalid requriment object'
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, 'Invalid requriment object'
+      end
     end
 
     case req['class']
@@ -408,7 +412,11 @@ class CommandLineTool < CWLObject
     when 'ResourceRequirement'
       ResourceRequirement.load(req, dir)
     else
-      raise CWLParseError, "Invalid requirement: #{req['class']}"
+      if hints
+        UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, "Invalid requirement: #{req['class']}"
+      end
     end
   end
 
@@ -2401,7 +2409,7 @@ class Workflow < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h, dir)
+      self.class.load_requirement(h, dir, true)
     }
 
     @label = obj.fetch('label', nil)
@@ -2409,9 +2417,13 @@ class Workflow < CWLObject
     @cwlVersion = obj.fetch('cwlVersion', nil)
   end
 
-  def self.load_requirement(req, dir)
+  def self.load_requirement(req, dir, hints = false)
     unless req.include? 'class'
-      raise CWLParseError, 'Invalid requriment object'
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, 'Invalid requriment object'
+      end
     end
 
     case req['class']
@@ -2440,7 +2452,11 @@ class Workflow < CWLObject
     when 'StepInputExpressionRequirement'
       StepInputExpressionRequirement.load(req, dir)
     else
-      raise CWLParseError, "Invalid requirement: #{req['class']}"
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, "Invalid requirement: #{req['class']}"
+      end
     end
   end
 
@@ -2834,7 +2850,7 @@ class WorkflowStep < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h, dir)
+      self.class.load_requirement(h, dir, true)
     }
 
     @label = obj.fetch('label', nil)
@@ -2849,9 +2865,13 @@ class WorkflowStep < CWLObject
                      end
   end
 
-  def self.load_requirement(req, dir)
+  def self.load_requirement(req, dir, hints = false)
     unless req.include? 'class'
-      raise CWLParseError, 'Invalid requriment object'
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, 'Invalid requriment object'
+      end
     end
 
     case req['class']
@@ -2880,7 +2900,11 @@ class WorkflowStep < CWLObject
     when 'StepInputExpressionRequirement'
       StepInputExpressionRequirement.load(req, dir)
     else
-      raise CWLParseError, "Invalid requirement: #{req['class']}"
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, "Invalid requirement: #{req['class']}"
+      end
     end
   end
 
@@ -3009,6 +3033,22 @@ class ScatterMethod
     else
       raise CWLParseError, "Unsupported scatter method: #{obj}"
     end
+  end
+end
+
+class UnknownRequirement < CWLObject
+  attr_reader :params
+
+  def self.load(obj, dir)
+    self.new(obj)
+  end
+
+  def initialize(obj)
+    @params = obj
+  end
+
+  def to_h
+    @params
   end
 end
 
@@ -3217,16 +3257,20 @@ class ExpressionTool < CWLObject
               }
             end
     @hints = hints.map{ |h|
-      self.class.load_requirement(h, dir)
+      self.class.load_requirement(h, dir, true)
     }
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
     @cwlVersion = obj.fetch('cwlVersion', nil)
   end
 
-  def self.load_requirement(req, dir)
+  def self.load_requirement(req, dir, hints = false)
     unless req.include? 'class'
-      raise CWLParseError, 'Invalid requriment object'
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, 'Invalid requriment object'
+      end
     end
 
     case req['class']
@@ -3255,7 +3299,11 @@ class ExpressionTool < CWLObject
     when 'StepInputExpressionRequirement'
       StepInputExpressionRequirement.load(req, dir)
     else
-      raise CWLParseError, "Invalid requirement: #{req['class']}"
+      if hints
+        return UnknownRequirement.load(req, dir)
+      else
+        raise CWLParseError, "Invalid requirement: #{req['class']}"
+      end
     end
   end
 
