@@ -542,7 +542,7 @@ def list_(cwl, output, runtime, inputs)
     }
     evaled = if oBinding.outputEval
                oBinding.outputEval.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
-                                            inputs, runtime, files.to_h)
+                                            inputs, runtime, files)
              else
                files
              end

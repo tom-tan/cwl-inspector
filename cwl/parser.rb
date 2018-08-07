@@ -2132,8 +2132,11 @@ def evaluate_parameter_reference(exp, inputs, runtime, self_)
     param, rest = body.match(/([^.]+)(\..+)?$/).values_at(1, 2)
     obj = inputs[param]
     obj.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
-  when /^self\.(.+)$/
+  when /^self(.+)$/
     rest = $1
+    if rest.start_with? '.'
+      rest = rest[1..-1]
+    end
     if self_.nil?
       raise CWLInspectionError, "Unknown context for self in the expression: #{exp}"
     end
