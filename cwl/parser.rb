@@ -923,16 +923,17 @@ class Directory < CWLObject
       dir.basename = File.basename dir.path
       if Dir.exist? dir.path
         dir.listing = Dir.entries(dir.path).reject{ |lst| lst.match(/^\.+$/) }.map{ |lst|
-          if File.directory? lst
+          path = File.expand_path(lst, dir.path)
+          if File.directory? path
             d = Directory.load({
                                  'class' => 'Directory',
-                                 'location' => 'file://'+File.expand_path(lst, dir.path),
+                                 'location' => 'file://'+path,
                                }, docdir)
             d.evaluate(docdir, false, strict)
           else
             f = CWLFile.load({
                                'class' => 'File',
-                               'location' => 'file://'+File.expand_path(lst, dir.path),
+                               'location' => 'file://'+path,
                              }, docdir)
             f.evaluate(docdir, false, strict)
           end
