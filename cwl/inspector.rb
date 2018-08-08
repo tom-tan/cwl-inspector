@@ -545,7 +545,7 @@ def list_(cwl, output, runtime, inputs)
                     type.items
                   end
       Dir.glob(pats, base: dir).map{ |f|
-        case elem_type
+        case elem_type.type
         when 'File'
           CWLFile.load({
                          'class' => 'File',
