@@ -264,19 +264,21 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
                  else
                    []
                  end
+  command = [
+    *walk(cwl, '.baseCommand', []),
+    *construct_args(cwl, runtime, replaced_inputs, self_),
+  ]
   shellargs = if walk(cwl, '.requirements.ShellCommandRequirement') or
                 walk(cwl, '.hints.ShellCommandRequirement')
-                ['/bin/sh', '-c']
+                ['/bin/sh', '-c', "\"#{command.join(' ')}\""]
               else
-                []
+                command
               end
 
 
   [
     *container_cmd,
     *shellargs,
-    *walk(cwl, '.baseCommand', []),
-    *construct_args(cwl, runtime, replaced_inputs, self_),
     *redirect_in,
     *redirect_out,
     *redirect_err,
