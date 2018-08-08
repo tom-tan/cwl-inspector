@@ -513,6 +513,7 @@ def list_(cwl, output, runtime, inputs)
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   else
     obj = walk(cwl, ".outputs.#{output.id}")
+    type = obj.type
     oBinding = obj.outputBinding
     if oBinding.nil?
       raise CWLInspectionError, 'Not yet supported for outputs without outputBinding'
@@ -527,18 +528,27 @@ def list_(cwl, output, runtime, inputs)
              else
                pats
              end
+      elem_type = if type.instance_of? CWLType
+                    type.type
+                  elsif type.instance_of? CommandOutputArraySchema
+                    type.items
+                  end
       Dir.glob(pats, base: dir).map{ |f|
-        CWLFile.load({
-                       'class' => 'File',
-                       'location' => 'file://'+File.expand_path(f, dir),
-                     }, runtime['docdir'].first)
+        case elem_type
+        when 'File'
+          CWLFile.load({
+                         'class' => 'File',
+                         'location' => 'file://'+File.expand_path(f, dir),
+                       }, runtime['docdir'].first)
+        when 'Directory'
+          Directory.load({
+                           'class' => 'Directory',
+                           'location' => 'file://'+File.expand_path(f, dir),
+                         }, runtime['docdir'].first)
+        end
       }
     }.flatten.map{ |f|
-      if File.exist? f.location.sub(%r|^file://|, '')
-        f.evaluate(runtime['docdir'].first, loadContents)
-      else
-        f
-      end
+      f.evaluate(runtime['docdir'].first, loadContents, false)
     }
     evaled = if oBinding.outputEval
                oBinding.outputEval.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
@@ -549,15 +559,14 @@ def list_(cwl, output, runtime, inputs)
     unless obj.secondaryFiles.empty?
       raise CWLInspectionError, '`secondaryFiles` is not supported'
     end
-    if obj.type.instance_of?(CWLType) and (obj.type.type == 'File' or
-                                           obj.type.type == 'Directory')
-      evaled.first.evaluate(runtime, false)
-    elsif obj.type.instance_of?(CommandOutputArraySchema) and
-         (obj.type.items == 'File' or obj.type.items == 'Directory')
-      evaled.map{ |f|
-        f.evaluate(runtime['docdir'].first, false)
-      }
+    if type.instance_of?(CWLType) and (type.type == 'File' or
+                                       type.type == 'Directory')
+      evaled.first
+    elsif type.instance_of?(CommandOutputArraySchema) and
+         (type.items == 'File' or type.items == 'Directory')
+      evaled
     else
+      # TODO
       evaled
     end
   end
