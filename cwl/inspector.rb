@@ -124,7 +124,8 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
             self_
           end
 
-  shellQuote = if walk(cwl, '.requirements.ShellCommandRequirement')
+  shellQuote = if walk(cwl, '.requirements.ShellCommandRequirement') or
+                 walk(cwl, '.hints.ShellCommandRequirement')
                  walk(binding_, '.shellQuote', true)
                else
                  unless walk(binding_, '.shellQuote', true)
