@@ -560,7 +560,7 @@ def list_(cwl, output, runtime, inputs)
       }
     }.flatten.map{ |f|
       f.evaluate(runtime['docdir'].first, loadContents, false)
-    }
+    }.sort_by{ |f| f.basename }
     evaled = if oBinding.outputEval
                oBinding.outputEval.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                                             inputs, runtime, files)
