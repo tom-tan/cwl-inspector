@@ -72,7 +72,8 @@ def docker_command(cwl, runtime, inputs)
              else
                raise "Unsupported platform: #{RUBY_PLATFORM}"
              end
-    envArgs = get_requirement(cwl, 'EnvVarRequirement', []).map{ |e|
+    envReq = get_requirement(cwl, 'EnvVarRequirement')
+    envArgs = (envReq ? envReq.envDef : []).map{ |e|
       val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                 inputs, runtime, nil)
       "--env=#{e.envName}=#{val}"
@@ -283,7 +284,8 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
                    []
                  end
   envArgs = if docker_requirement(cwl).nil?
-              get_requirement(cwl, 'EnvVarRequirement', []).map{ |e|
+              req = get_requirement(cwl, 'EnvVarRequirement')
+              (req ? req.envDef : []).map{ |e|
                 val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                           inputs, runtime, nil)
                 "#{e.envName}=#{val};"
