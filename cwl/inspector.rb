@@ -116,6 +116,8 @@ end
 def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
   if type.instance_of? CommandInputUnionSchema
     return evaluate_input_binding(cwl, self_.type, binding_, runtime, inputs, self_.value)
+  elsif type.instance_of?(CWLType) and type.type == 'null'
+    return
   end
   valueFrom = walk(binding_, '.valueFrom')
   value = nil
@@ -154,7 +156,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
     when CWLType
       case type.type
       when 'null'
-        # add nothing
+        raise CWLInspectionError, "Internal error: this statement should not be executed"
       when 'boolean'
         if value
           pre
