@@ -5,7 +5,7 @@ require 'parslet'
 # https://www.commonwl.org/v1.0/CommandLineTool.html#Parameter_references
 class ParameterReferenceParser < Parslet::Parser
   rule(:symbol) {
-    match(/[[:alnum:]]/).repeat(1)
+    match(/[[:alnum:]_]/).repeat(1)
   }
   rule(:singleq) {
     str("['") >> (str("'").absent? >> match(/./) | str("\\'")).repeat >> str("']")
