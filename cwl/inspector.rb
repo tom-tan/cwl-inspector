@@ -539,23 +539,18 @@ def list_(cwl, output, runtime, inputs)
              else
                pats
              end
-      elem_type = if type.instance_of? CWLType
-                    type.type
-                  elsif type.instance_of? CommandOutputArraySchema
-                    type.items.type
-                  end
       Dir.glob(pats, base: dir).map{ |f|
-        case elem_type
-        when 'File'
-          CWLFile.load({
-                         'class' => 'File',
-                         'location' => 'file://'+File.expand_path(f, dir),
-                       }, runtime['docdir'].first)
-        when 'Directory'
+        path = File.expand_path(f, dir)
+        if File.directory? path
           Directory.load({
                            'class' => 'Directory',
-                           'location' => 'file://'+File.expand_path(f, dir),
+                           'location' => 'file://'+path,
                          }, runtime['docdir'].first)
+        else
+          CWLFile.load({
+                         'class' => 'File',
+                         'location' => 'file://'+path,
+                       }, runtime['docdir'].first)
         end
       }
     }.flatten.map{ |f|

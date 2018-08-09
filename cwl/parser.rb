@@ -827,7 +827,7 @@ class CWLFile < CWLObject
     }
     file.contents = if @contents
                       @contents
-                    elsif loadContents and strict
+                    elsif loadContents and File.exist?(file.path)
                       File.open(file.path).read(64*2**10)
                     end
     file.format = @format
