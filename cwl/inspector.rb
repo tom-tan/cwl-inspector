@@ -72,10 +72,15 @@ def docker_command(cwl, runtime, inputs)
              else
                raise "Unsupported platform: #{RUBY_PLATFORM}"
              end
+    envArgs = get_requirement(cwl, 'EnvVarRequirement', []).map{ |e|
+      val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
+                                inputs, runtime, nil)
+      "--env=#{e.envName}=#{val}"
+    }
     cmd = [
       'docker', 'run', '-i', '--read-only', '--rm',
       "--workdir=#{vardir}/spool/cwl", "--env=HOME=#{vardir}/spool/cwl",
-      "--env=TMPDIR=/tmp",
+      "--env=TMPDIR=/tmp", *envArgs,
       "--user=#{Process::UID.eid}:#{Process::GID.eid}",
       "-v #{runtime['outdir']}:#{vardir}/spool/cwl",
       "-v #{runtime['tmpdir']}:/tmp",
@@ -280,7 +285,17 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
                  else
                    []
                  end
+  envArgs = if docker_requirement(cwl).nil?
+              get_requirement(cwl, 'EnvVarRequirement', []).map{ |e|
+                val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
+                                          inputs, runtime, nil)
+                "#{e.envName}=#{val};"
+              }
+            else
+              []
+            end
   command = [
+    *envArgs,
     *walk(cwl, '.baseCommand', []),
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
