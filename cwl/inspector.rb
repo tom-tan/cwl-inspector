@@ -542,10 +542,10 @@ def list_(cwl, output, runtime, inputs)
       elem_type = if type.instance_of? CWLType
                     type.type
                   elsif type.instance_of? CommandOutputArraySchema
-                    type.items
+                    type.items.type
                   end
       Dir.glob(pats, base: dir).map{ |f|
-        case elem_type.type
+        case elem_type
         when 'File'
           CWLFile.load({
                          'class' => 'File',
