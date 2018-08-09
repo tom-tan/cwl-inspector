@@ -78,12 +78,13 @@ def docker_command(cwl, runtime, inputs)
                                 inputs, runtime, nil)
       "--env=#{e.envName}='#{val}'"
     }
+    workdir = (dockerReq.dockerOutputDirectory or "#{vardir}/spool/cwl")
     cmd = [
       'docker', 'run', '-i', '--read-only', '--rm',
-      "--workdir=#{vardir}/spool/cwl", "--env=HOME=#{vardir}/spool/cwl",
+      "--workdir=#{workdir}", "--env=HOME=#{workdir}",
       "--env=TMPDIR=/tmp", *envArgs,
       "--user=#{Process::UID.eid}:#{Process::GID.eid}",
-      "-v #{runtime['outdir']}:#{vardir}/spool/cwl",
+      "-v #{runtime['outdir']}:#{workdir}",
       "-v #{runtime['tmpdir']}:/tmp",
     ]
 
