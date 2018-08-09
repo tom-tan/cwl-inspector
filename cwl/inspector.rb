@@ -295,7 +295,9 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
             end
   command = [
     *envArgs,
-    *walk(cwl, '.baseCommand', []),
+    *walk(cwl, '.baseCommand', []).map{ |cmd|
+      "'#{cmd}'"
+    },
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
   shellargs = if get_requirement(cwl, 'ShellCommandRequirement')
