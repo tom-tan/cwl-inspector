@@ -258,26 +258,24 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
     cwl = CommonWorkflowLanguage.load_file(cwl)
   end
   container_cmd, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
+  use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
 
   redirect_in = if walk(cwl, '.stdin')
-                  fname = cwl.stdin.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                             inputs, runtime, self_)
+                  fname = cwl.stdin.evaluate(use_js, inputs, runtime, self_)
                   ['<', fname]
                 else
                   []
                 end
 
   redirect_out = if walk(cwl, '.stdout')
-                   fname = cwl.stdout.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                               inputs, runtime, self_)
+                   fname = cwl.stdout.evaluate(use_js, inputs, runtime, self_)
                    ['>', File.join(runtime['outdir'], fname)]
                  else
                    []
                  end
 
   redirect_err = if walk(cwl, '.stderr')
-                   fname = cwl.stderr.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                               inputs, runtime, self_)
+                   fname = cwl.stderr.evaluate(use_js, inputs, runtime, self_)
                    ['2>', File.join(runtime['outdir'], fname)]
                  else
                    []
@@ -316,18 +314,17 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
     ],
   }
 
+  use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
   reqs = get_requirement(cwl, 'ResourceRequirement')
 
   # cores
   coresMin = (reqs and reqs.coresMin)
   if coresMin.instance_of? Expression
-    coresMin = coresMin.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                 inputs, runtime, nil)
+    coresMin = coresMin.evaluate(use_js, inputs, runtime, nil)
   end
   coresMax = (reqs and reqs.coresMax)
   if coresMax.instance_of? Expression
-    coresMax = coresMax.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                 inputs, runtime, nil)
+    coresMax = coresMax.evaluate(use_js, inputs, runtime, nil)
   end
   raise "Invalid ResourceRequirement" if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
   coresMin = coresMax if coresMin.nil?
@@ -343,13 +340,11 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   # mem
   ramMin = (reqs and reqs.ramMin)
   if ramMin.instance_of? Expression
-    ramMin = ramMin.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                             inputs, runtime, nil)
+    ramMin = ramMin.evaluate(use_js, inputs, runtime, nil)
   end
   ramMax = (reqs and reqs.ramMax)
   if ramMax.instance_of? Expression
-    ramMax = ramMax.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                             inputs, runtime, nil)
+    ramMax = ramMax.evaluate(use_js, inputs, runtime, nil)
   end
   raise "Invalid ResourceRequirement" if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
   ramMin = ramMax if ramMin.nil?
@@ -507,11 +502,12 @@ end
 
 def list_(cwl, output, runtime, inputs)
   type = output.type
+  use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
+
   case type
   when Stdout
     fname = walk(cwl, '.stdout')
-    evaled = fname.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                            inputs, runtime, nil)
+    evaled = fname.evaluate(use_js, inputs, runtime, nil)
     dir = runtime['outdir']
     location = if evaled.end_with? '.stdout'
                  File.join(dir, Dir.glob('*.stdout', base: dir).first)
@@ -525,8 +521,7 @@ def list_(cwl, output, runtime, inputs)
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   when Stderr
     fname = walk(cwl, '.stderr')
-    evaled = fname.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                            inputs, runtime, nil)
+    evaled = fname.evaluate(use_js, inputs, runtime, nil)
     dir = runtime['outdir']
     location = if evaled.end_with? '.stderr'
                  File.join(dir, Dir.glob('*.stderr', base: dir).first)
@@ -548,8 +543,7 @@ def list_(cwl, output, runtime, inputs)
     loadContents = oBinding.loadContents
     dir = runtime['outdir']
     files = oBinding.glob.map{ |g|
-      pats = g.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                        inputs, runtime, nil)
+      pats = g.evaluate(use_js, inputs, runtime, nil)
       pats = if pats.instance_of? Array
                pats.join "\0"
              else
@@ -573,8 +567,7 @@ def list_(cwl, output, runtime, inputs)
       f.evaluate(runtime['docdir'].first, loadContents, false)
     }.sort_by{ |f| f.basename }
     evaled = if oBinding.outputEval
-               oBinding.outputEval.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                            inputs, runtime, files)
+               oBinding.outputEval.evaluate(use_js, inputs, runtime, files)
              else
                files
              end
