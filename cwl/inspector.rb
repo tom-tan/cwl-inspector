@@ -43,13 +43,25 @@ class UninstantiatedVariable
   end
 end
 
+def get_requirement(cwl, req, default = nil)
+  walk(cwl, ".requirements.#{req}",
+       walk(cwl, ".hints.#{req}", default))
+end
+
+def docker_requirement(cwl)
+  if walk(cwl, '.requirements.DockerRequirement')
+    walk(cwl, '.requirements.DockerRequirement')
+  elsif walk(cwl, '.hints.DockerRequirement') and system('which docker > /dev/null')
+    walk(cwl, '.hints.DockerRequirement')
+  else
+    nil
+  end
+end
+
 def docker_command(cwl, runtime, inputs)
-  img = if walk(cwl, '.requirements.DockerRequirement')
-          walk(cwl, '.requirements.DockerRequirement.dockerPull')
-        elsif walk(cwl, '.hints.DockerRequirement') and system('which docker > /dev/null')
-          walk(cwl, '.hints.DockerRequirement.dockerPull')
-        else
-          nil
+  dockerReq = docker_requirement(cwl)
+  img = if dockerReq
+          dockerReq.dockerPull
         end
   if img
     vardir = case RUBY_PLATFORM
@@ -124,15 +136,14 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
   if self_.instance_of? UninstantiatedVariable
     value = valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
   elsif valueFrom
-    value = valueFrom.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    value = valueFrom.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                inputs, runtime, self_)
     type = guess_type(value)
   else
     value = self_
   end
 
-  shellQuote = if walk(cwl, '.requirements.ShellCommandRequirement') or
-                 walk(cwl, '.hints.ShellCommandRequirement')
+  shellQuote = if get_requirement(cwl, 'ShellCommandRequirement')
                  walk(binding_, '.shellQuote', true)
                else
                  unless walk(binding_, '.shellQuote', true)
@@ -249,7 +260,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   container_cmd, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
 
   redirect_in = if walk(cwl, '.stdin')
-                  fname = cwl.stdin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                  fname = cwl.stdin.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                              inputs, runtime, self_)
                   ['<', fname]
                 else
@@ -257,7 +268,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
                 end
 
   redirect_out = if walk(cwl, '.stdout')
-                   fname = cwl.stdout.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                   fname = cwl.stdout.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                                inputs, runtime, self_)
                    ['>', File.join(runtime['outdir'], fname)]
                  else
@@ -265,7 +276,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
                  end
 
   redirect_err = if walk(cwl, '.stderr')
-                   fname = cwl.stderr.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+                   fname = cwl.stderr.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                                inputs, runtime, self_)
                    ['2>', File.join(runtime['outdir'], fname)]
                  else
@@ -275,8 +286,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
     *walk(cwl, '.baseCommand', []),
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
-  shellargs = if walk(cwl, '.requirements.ShellCommandRequirement') or
-                walk(cwl, '.hints.ShellCommandRequirement')
+  shellargs = if get_requirement(cwl, 'ShellCommandRequirement')
                 ['/bin/sh', '-c', "\"#{command.join(' ')}\""]
               else
                 command
@@ -306,18 +316,17 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
     ],
   }
 
-  reqs = walk(cwl, '.requirements.ResourceRequirement')
-  hints = walk(cwl, '.hints.ResourceRequirement')
+  reqs = get_requirement(cwl, 'ResourceRequirement')
 
   # cores
-  coresMin = ((reqs and reqs.coresMin) or (hints and hints.coresMin))
+  coresMin = (reqs and reqs.coresMin)
   if coresMin.instance_of? Expression
-    coresMin = coresMin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    coresMin = coresMin.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                  inputs, runtime, nil)
   end
-  coresMax = ((reqs and reqs.coresMax) or (hints and hints.coresMax))
+  coresMax = (reqs and reqs.coresMax)
   if coresMax.instance_of? Expression
-    coresMax = coresMax.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    coresMax = coresMax.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                  inputs, runtime, nil)
   end
   raise "Invalid ResourceRequirement" if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
@@ -332,14 +341,14 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
                      end
 
   # mem
-  ramMin = ((reqs and reqs.ramMin) or (hints and hints.ramMin))
+  ramMin = (reqs and reqs.ramMin)
   if ramMin.instance_of? Expression
-    ramMin = ramMin.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    ramMin = ramMin.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                              inputs, runtime, nil)
   end
-  ramMax = ((reqs and reqs.ramMax) or (hints and hints.ramMax))
+  ramMax = (reqs and reqs.ramMax)
   if ramMax.instance_of? Expression
-    ramMax = ramMax.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    ramMax = ramMax.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                              inputs, runtime, nil)
   end
   raise "Invalid ResourceRequirement" if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
@@ -501,7 +510,7 @@ def list_(cwl, output, runtime, inputs)
   case type
   when Stdout
     fname = walk(cwl, '.stdout')
-    evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    evaled = fname.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                             inputs, runtime, nil)
     dir = runtime['outdir']
     location = if evaled.end_with? '.stdout'
@@ -516,7 +525,7 @@ def list_(cwl, output, runtime, inputs)
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   when Stderr
     fname = walk(cwl, '.stderr')
-    evaled = fname.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+    evaled = fname.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                             inputs, runtime, nil)
     dir = runtime['outdir']
     location = if evaled.end_with? '.stderr'
@@ -539,7 +548,7 @@ def list_(cwl, output, runtime, inputs)
     loadContents = oBinding.loadContents
     dir = runtime['outdir']
     files = oBinding.glob.map{ |g|
-      pats = g.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+      pats = g.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                         inputs, runtime, nil)
       pats = if pats.instance_of? Array
                pats.join "\0"
@@ -564,7 +573,7 @@ def list_(cwl, output, runtime, inputs)
       f.evaluate(runtime['docdir'].first, loadContents, false)
     }.sort_by{ |f| f.basename }
     evaled = if oBinding.outputEval
-               oBinding.outputEval.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+               oBinding.outputEval.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                             inputs, runtime, files)
              else
                files
@@ -655,7 +664,7 @@ if $0 == __FILE__
           when 'CommandLineTool'
             commandline(cwl, runtime, inputs)
           when 'ExpressionTool'
-            obj = cwl.expression.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+            obj = cwl.expression.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                           inputs, runtime)
             "echo '#{JSON.dump(obj).gsub("'"){ "\\'" }}' > #{File.join(runtime['outdir'], 'cwl.output.json')}"
           else
