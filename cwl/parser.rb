@@ -785,10 +785,10 @@ class CWLFile < CWLObject
     file = self.dup
     location = @location.nil? ? @path : @location
     if location.nil?
-      if @contents.empty?
+      if @contents.nil?
         raise CWLInspectionError, "`path`, `location` or `contents` is necessary for File object: #{self}"
       end
-      raise CWLInspectionError, "Unsupported"
+      raise CWLInspectionError, "Currently file literals without `path` or `location` is not supported"
       # If the location field is not provided, the contents field must be provided. The implementation must assign a unique identifier for the location field.
     end
 
