@@ -2162,7 +2162,11 @@ def evaluate_parameter_reference(exp, inputs, runtime, self_)
     body = $1
     param, rest = body.match(/([^.]+)(\..+)?$/).values_at(1, 2)
     obj = inputs[param]
-    obj.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+    if rest.nil?
+      obj
+    else
+      obj.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+    end
   when /^self(.+)$/
     rest = $1
     if rest.start_with? '.'
@@ -2171,7 +2175,11 @@ def evaluate_parameter_reference(exp, inputs, runtime, self_)
     if self_.nil?
       raise CWLInspectionError, "Unknown context for self in the expression: #{exp}"
     end
-    self_.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+    if rest.nil?
+      self_
+    else
+      self_.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+    end
   when /^runtime\.(.+)$/
     attr = $1
     if runtime.reject{ |k, _| k == 'docdir' }.include? attr
