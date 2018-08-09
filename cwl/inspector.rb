@@ -114,15 +114,20 @@ def dockerized(input, type, vardir)
 end
 
 def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
+  if type.instance_of? CommandInputUnionSchema
+    return evaluate_input_binding(cwl, self_.type, binding_, runtime, inputs, self_.value)
+  end
   valueFrom = walk(binding_, '.valueFrom')
-  value = if self_.instance_of? UninstantiatedVariable
-            valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
-          elsif valueFrom
-            valueFrom.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
+  value = nil
+  if self_.instance_of? UninstantiatedVariable
+    value = valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
+  elsif valueFrom
+    value = valueFrom.evaluate(walk(cwl, '.requirements.InlineJavascriptRequirement', false),
                                inputs, runtime, self_)
-          else
-            self_
-          end
+    type = guess_type(value)
+  else
+    value = self_
+  end
 
   shellQuote = if walk(cwl, '.requirements.ShellCommandRequirement') or
                  walk(cwl, '.hints.ShellCommandRequirement')
@@ -187,7 +192,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
       tmp = pre ? [pre, vals.join(isep)] : [vals.join(isep)]
       sep ? tmp.join(' ') : tmp.join
     when CommandInputUnionSchema
-      evaluate_input_binding(cwl, value.type, binding_, runtime, inputs, value.value)
+      raise CWLInspectionError, "Internal error: this statement should not be executed"
     else
       raise CWLInspectionError, "Unsupported type: #{type}"
     end
