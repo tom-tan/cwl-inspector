@@ -151,9 +151,6 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
   shellQuote = if get_requirement(cwl, 'ShellCommandRequirement')
                  walk(binding_, '.shellQuote', true)
                else
-                 unless walk(binding_, '.shellQuote', true)
-                   raise CWLInspectionError, "`shellQuote' should be used with `ShellCommandRequirement'"
-                 end
                  true
                end
 
