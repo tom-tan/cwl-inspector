@@ -507,9 +507,13 @@ def list(cwl, runtime, inputs)
   dir = runtime['outdir']
 
   if File.exist? File.join(dir, 'cwl.output.json')
-    open(File.join(dir, 'cwl.output.json')) { |f|
+    json = open(File.join(dir, 'cwl.output.json')) { |f|
       JSON.load(f)
     }
+    Hash[json.each.map{ |k, v|
+           [k,
+            parse_object(k, nil, v, nil, false, runtime['docdir'].first, true).to_h]
+         }]
   else
     Hash[walk(cwl, '.outputs', []).map { |o|
            [o.id, list_(cwl, o, runtime, inputs).to_h]
