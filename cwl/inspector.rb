@@ -301,7 +301,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
   shellargs = if get_requirement(cwl, 'ShellCommandRequirement')
-                ['/bin/sh', '-c', "\"#{command.join(' ')}\""]
+                ['/bin/sh', '-c', "\"#{command.join(' ').gsub(/"/) { '\\"' }}\""]
               else
                 command
               end
