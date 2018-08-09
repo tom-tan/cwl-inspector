@@ -76,7 +76,7 @@ def docker_command(cwl, runtime, inputs)
     envArgs = (envReq ? envReq.envDef : []).map{ |e|
       val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                 inputs, runtime, nil)
-      "--env=#{e.envName}=#{val}"
+      "--env=#{e.envName}='#{val}'"
     }
     cmd = [
       'docker', 'run', '-i', '--read-only', '--rm',
@@ -288,7 +288,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
               (req ? req.envDef : []).map{ |e|
                 val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                           inputs, runtime, nil)
-                "#{e.envName}=#{val};"
+                "#{e.envName}='#{val}';"
               }
             else
               []
