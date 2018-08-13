@@ -297,7 +297,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   command = [
     *envArgs,
     *walk(cwl, '.baseCommand', []).map{ |cmd|
-      "'#{cmd}'"
+      "\"#{cmd}\""
     },
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
