@@ -991,7 +991,7 @@ class CommandInputUnionSchema < CWLObject
 end
 
 class CommandInputRecordSchema < CWLObject
-  cwl_object_preamble :type, :fields, :label
+  cwl_object_preamble :type, :fields, :label, :name
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -1011,6 +1011,7 @@ class CommandInputRecordSchema < CWLObject
       CommandInputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
+    @name = obj.fetch('name', nil)
   end
 
   def to_h
@@ -1022,6 +1023,7 @@ class CommandInputRecordSchema < CWLObject
       }
     end
     ret['label'] = @label unless @label.nil?
+    ret['name'] = @name unless @name.nil?
     ret
   end
 end
@@ -1304,7 +1306,7 @@ class CommandOutputUnionSchema < CWLObject
 end
 
 class CommandOutputRecordSchema < CWLObject
-  cwl_object_preamble :type, :fields, :label
+  cwl_object_preamble :type, :fields, :label, :name
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -1324,6 +1326,7 @@ class CommandOutputRecordSchema < CWLObject
       CommandOutputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
+    @name = obj.fetch('name', nil)
   end
 
   def to_h
@@ -1335,6 +1338,7 @@ class CommandOutputRecordSchema < CWLObject
       }
     end
     ret['label'] = @label unless @label.nil?
+    ret['name'] = @name unless @name.nil?
     ret
   end
 end
