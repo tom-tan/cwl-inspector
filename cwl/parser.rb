@@ -1552,7 +1552,7 @@ class InputUnionSchema < CWLObject
 end
 
 class InputRecordSchema < CWLObject
-  cwl_object_preamble :type, :fields, :label
+  cwl_object_preamble :type, :fields, :label, :name
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -1572,6 +1572,7 @@ class InputRecordSchema < CWLObject
       InputRecordField.load(f, dir)
     }
     @label = obj.fetch('label', nil)
+    @name = obj.fetch('name', nil)
   end
 
   def to_h
@@ -1583,6 +1584,7 @@ class InputRecordSchema < CWLObject
       }
     end
     ret['label'] = @label unless @label.nil?
+    ret['name'] = @name unless @name.nil?
     ret
   end
 end
