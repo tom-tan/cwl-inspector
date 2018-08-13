@@ -470,7 +470,7 @@ def parse_object(id, type, obj, default, loadContents, docdir, strict)
                       parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
                                    loadContents, docdir, strict))
   when CommandInputRecordSchema
-    raise CWLInspectionError, "Unsupported input type: #{type.class}"
+    raise CWLInspectionError, "Record types are not supported: #{type.class}"
     # unless obj.instance_of? Hash
     #   raise CWLInspectionError, "#{input.id} must be a record type of #{input.type.fields.map{ |f| f.type}.join(', ')}"
     # end
@@ -482,7 +482,7 @@ def parse_object(id, type, obj, default, loadContents, docdir, strict)
     #   [f.name, parse_object("id.#{f.name}", f.type, obj[f.name], nil, loadContents, runtime)]
     # }]
   when CommandInputEnumSchema
-    raise CWLInspectionError, "Unsupported input type: #{type.class}"
+    raise CWLInspectionError, "Enum types are not supported: #{type.class}"
     # unless obj.instance_of?(String) and input.symbols.include? obj
     #   raise CWLInspectionError, "#{input.id} requires must be #{input.symbols.join(', ')}"
     # end
