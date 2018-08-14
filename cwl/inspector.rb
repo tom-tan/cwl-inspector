@@ -445,13 +445,13 @@ def parse_object(id, type, obj, default, loadContents, docdir, strict)
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
-      file = obj.nil? ? default : CWLFile.load(obj, docdir)
+      file = obj.nil? ? default : CWLFile.load(obj, docdir, {})
       file.evaluate(docdir, loadContents, strict)
     when 'Directory'
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
-      dir = obj.nil? ? default : Directory.load(obj, docdir)
+      dir = obj.nil? ? default : Directory.load(obj, docdir, {})
       dir.evaluate(docdir, nil, strict)
     end
   when CommandInputUnionSchema
@@ -538,7 +538,7 @@ def list_(cwl, output, runtime, inputs)
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
-                        }, runtime['docdir'].first)
+                        }, runtime['docdir'].first, {})
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   when Stderr
     fname = walk(cwl, '.stderr')
@@ -552,7 +552,7 @@ def list_(cwl, output, runtime, inputs)
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
-                        }, runtime['docdir'].first)
+                        }, runtime['docdir'].first, {})
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   else
     obj = walk(cwl, ".outputs.#{output.id}")
@@ -576,12 +576,12 @@ def list_(cwl, output, runtime, inputs)
           Directory.load({
                            'class' => 'Directory',
                            'location' => 'file://'+path,
-                         }, runtime['docdir'].first)
+                         }, runtime['docdir'].first, {})
         else
           CWLFile.load({
                          'class' => 'File',
                          'location' => 'file://'+path,
-                       }, runtime['docdir'].first)
+                       }, runtime['docdir'].first, {})
         end
       }
     }.flatten.map{ |f|
