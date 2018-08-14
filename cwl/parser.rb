@@ -1079,7 +1079,7 @@ class CommandInputRecordField < CWLObject
 end
 
 class CommandInputEnumSchema < CWLObject
-  cwl_object_preamble :symbols, :type, :label, :inputBinding
+  cwl_object_preamble :symbols, :type, :label, :name, :inputBinding
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -1644,7 +1644,7 @@ class InputRecordField < CWLObject
 end
 
 class InputEnumSchema < CWLObject
-  cwl_object_preamble :symbols, :type, :label, :inputBinding
+  cwl_object_preamble :symbols, :type, :label, :name, :inputBinding
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
