@@ -190,6 +190,11 @@ class CommonWorkflowLanguage
   def self.load_file(file)
     obj = preprocess(file)
     frags = fragments(file)
+    obj = if file.match(/^.+#(.+)$/)
+            frags[$1]
+          else
+            obj
+          end
     self.load(obj, File.dirname(File.expand_path(file)), frags)
   end
 
@@ -634,7 +639,7 @@ class CWLInputType
       CWLType.load(obj, dir, frags)
     when /^(.+)#(.+)$/
       file, fragment = $1, $2
-      self.load(fragments(file, dir)[fragment], dir, frags)
+      self.load(fragments(File.join(dir, file))[fragment], dir, frags)
     when /^#(.+)$/
       f = frags[$1]
       self.load(f, dir, frags)
@@ -673,7 +678,7 @@ class CWLCommandInputType
       CWLType.load(obj, dir, frags)
     when /^(.+)#(.+)$/
       file, fragment = $1, $2
-      self.load(fragments(file, dir)[fragment], dir, frags)
+      self.load(fragments(File.join(dir, file))[fragment], dir, frags)
     when /^#(.+)$/
       self.load(frags[$1], dir, frags)
     else

@@ -28,6 +28,11 @@ require 'open-uri'
 require 'optparse'
 
 def preprocess(file)
+  file = if file.match(/^(.+?)#.+$/)
+           $1
+         else
+           file
+         end
   obj = YAML.load_file(file)
   basedir = File.dirname(File.expand_path(file))
   traverse(obj, basedir)
