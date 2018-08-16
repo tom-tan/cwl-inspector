@@ -2299,6 +2299,9 @@ class Expression
   end
 
   def evaluate(use_js, inputs, runtime, self_ = nil)
+    unless inputs.values.find_index{ |v| v.instance_of? UninstantiatedVariable }.nil?
+      return "evaled(#{@expression})"
+    end
     expression = @expression.chomp
 
     rx = use_js ? /\$([({])/ : /\$\(/
@@ -3653,6 +3656,14 @@ def guess_type(value)
                                  }, nil, {})
   else
     raise CWLInspectionError, "Unsupported value: #{value}"
+  end
+end
+
+class UninstantiatedVariable
+  attr_reader :name
+
+  def initialize(var)
+    @name = var
   end
 end
 

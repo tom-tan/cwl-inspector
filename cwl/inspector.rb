@@ -35,14 +35,6 @@ def keys(file, path, default=[])
   end
 end
 
-class UninstantiatedVariable
-  attr_reader :name
-
-  def initialize(var)
-    @name = var
-  end
-end
-
 def get_requirement(cwl, req, default = nil)
   walk(cwl, ".requirements.#{req}",
        walk(cwl, ".hints.#{req}", default))
@@ -333,15 +325,20 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
 
   use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
   reqs = get_requirement(cwl, 'ResourceRequirement')
+  can_eval = inputs.values.find_index{ |v| v.instance_of? UninstantiatedVariable }.nil?
 
   # cores
   coresMin = (reqs and reqs.coresMin)
-  if coresMin.instance_of? Expression
-    coresMin = coresMin.evaluate(use_js, inputs, runtime, nil)
+  if coresMin.instance_of?(Expression)
+    coresMin = if can_eval
+                 coresMin.evaluate(use_js, inputs, runtime, nil)
+               end
   end
   coresMax = (reqs and reqs.coresMax)
-  if coresMax.instance_of? Expression
-    coresMax = coresMax.evaluate(use_js, inputs, runtime, nil)
+  if coresMax.instance_of?(Expression)
+    coresMax = if can_eval
+                 coresMax.evaluate(use_js, inputs, runtime, nil)
+               end
   end
   raise "Invalid ResourceRequirement" if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
   coresMin = coresMax if coresMin.nil?
@@ -356,12 +353,16 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
 
   # mem
   ramMin = (reqs and reqs.ramMin)
-  if ramMin.instance_of? Expression
-    ramMin = ramMin.evaluate(use_js, inputs, runtime, nil)
+  if ramMin.instance_of?(Expression)
+    ramMin = if can_eval
+               ramMin.evaluate(use_js, inputs, runtime, nil)
+             end
   end
   ramMax = (reqs and reqs.ramMax)
-  if ramMax.instance_of? Expression
-    ramMax = ramMax.evaluate(use_js, inputs, runtime, nil)
+  if ramMax.instance_of?(Expression)
+    ramMax = if can_eval
+               ramMax.evaluate(use_js, inputs, runtime, nil)
+             end
   end
   raise "Invalid ResourceRequirement" if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
   ramMin = ramMax if ramMin.nil?
@@ -665,7 +666,7 @@ if $0 == __FILE__
           CommonWorkflowLanguage.load_file(file)
         end
   inputs = parse_inputs(cwl, inp_obj,
-                        cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
+                        file == '-' ? Dir.pwd : File.dirname(File.expand_path file),
                         strict)
   runtime = eval_runtime(file, inputs, outdir, tmpdir)
 
