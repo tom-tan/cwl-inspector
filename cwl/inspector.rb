@@ -406,7 +406,8 @@ def parse_object(id, type, obj, default, loadContents, docdir, strict)
     if obj.nil? and default.nil?
       raise CWLInspectionError, '`Any` type requires non-null object'
     end
-    type = guess_type(obj)
+    v = (obj or default)
+    type = guess_type(v)
   end
 
   case type
