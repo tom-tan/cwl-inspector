@@ -164,19 +164,23 @@ class Array
   end
 
   def keys
-    fst = self.first
-    field = if fst.instance_variable_defined? '@id'
-              '@id'
-            elsif fst.instance_variable_defined? '@class_'
-              '@class_'
-            elsif fst.instance_variable_defined? '@package'
-              '@package'
-            else
-              raise CWLInspectionError, "Invalid operation `keys` for #{self.first.class}[]"
-            end
-    self.map{ |e|
-      e.instance_variable_get(field)
-    }
+    if self.empty?
+      self
+    else
+      fst = self.first
+      field = if fst.instance_variable_defined? '@id'
+                '@id'
+              elsif fst.instance_variable_defined? '@class_'
+                '@class_'
+              elsif fst.instance_variable_defined? '@package'
+                '@package'
+              else
+                raise CWLInspectionError, "Invalid operation `keys` for #{self.first.class}[]"
+              end
+      self.map{ |e|
+        e.instance_variable_get(field)
+      }
+    end
   end
 
   def to_h
