@@ -288,12 +288,7 @@ class CommandLineTool < CWLObject
                           'type' => v,
                         }
                       else
-                        o = {}
-                        o['id'] = k
-                        v.each{ |f, val|
-                          o[f] = val
-                        }
-                        o
+                        v.merge({ 'id' => k })
                       end
                   CommandInputParameter.load(o, dir, frags)
                 }
@@ -313,12 +308,7 @@ class CommandLineTool < CWLObject
                            'type' => v,
                          }
                        else
-                         o = {}
-                         o['id'] = k
-                         v.each{ |f, val|
-                           o[f] = val
-                         }
-                         o
+                         v.merge({ 'id' => k })
                        end
                    CommandOutputParameter.load(o, dir, frags)
                  }
@@ -330,12 +320,7 @@ class CommandLineTool < CWLObject
              obj.fetch('requirements', [])
            else
              obj['requirements'].map{ |k, v|
-               o = {}
-               o['class'] = k
-               v.each{ |f, val|
-                 o[f] = val
-               }
-               o
+               v.merge({ 'class' => k })
              }
            end
     @requirements = reqs.map{ |r|
@@ -346,12 +331,7 @@ class CommandLineTool < CWLObject
               obj.fetch('hints', [])
             else
               obj['hints'].map{ |k, v|
-                o = {}
-                o['class'] = k
-                v.each{ |f, val|
-                  o[f] = val
-                }
-                o
+                v.merge({ 'class' => k })
               }
             end
     @hints = hints.map{ |h|
@@ -1025,9 +1005,25 @@ class CommandInputRecordSchema < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
-    @fields = obj.fetch('fields', []).map{ |f|
-      CommandInputRecordField.load(f, dir, frags)
-    }
+    @fields = if obj.fetch('fields', []).instance_of? Array
+                obj.fetch('fields', []).map{ |f|
+                  CommandInputRecordField.load(f, dir, frags)
+                }
+              else
+                obj.map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'name' => k,
+                          'type' => v,
+                        }
+                      else
+                        v.merge({ 'name' => k })
+                      end
+                  CommandInputRecordField.load(o, dir, frags)
+                }
+              end
     @label = obj.fetch('label', nil)
     @name = obj.fetch('name', nil)
   end
@@ -1340,9 +1336,25 @@ class CommandOutputRecordSchema < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
-    @fields = obj.fetch('fields', []).map{ |f|
-      CommandOutputRecordField.load(f, dir, frags)
-    }
+    @fields = if obj.fetch('fields', []).instance_of? Array
+                obj.fetch('fields', []).map{ |f|
+                  CommandOutputRecordField.load(f, dir, frags)
+                }
+              else
+                obj.map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'name' => k,
+                          'type' => v,
+                        }
+                      else
+                        v.merge({ 'name' => k })
+                      end
+                  CommandOutputRecordField.load(o, dir, frags)
+                }
+              end
     @label = obj.fetch('label', nil)
     @name = obj.fetch('name', nil)
   end
@@ -1590,9 +1602,25 @@ class InputRecordSchema < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
-    @fields = obj.fetch('fields', []).map{ |f|
-      InputRecordField.load(f, dir, frags)
-    }
+    @fields = if obj.fetch('fields', []).instance_of? Array
+                obj.fetch('fields', []).map{ |f|
+                  InputRecordField.load(f, dir, frags)
+                }
+              else
+                obj.map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'name' => k,
+                          'type' => v,
+                        }
+                      else
+                        v.merge({ 'name' => k })
+                      end
+                  InputRecordField.load(o, dir, frags)
+                }
+              end
     @label = obj.fetch('label', nil)
     @name = obj.fetch('name', nil)
   end
@@ -1783,12 +1811,7 @@ class SoftwareRequirement < CWLObject
                   ps = obj['packages']
                   packages = if ps.values.first.instance_of? Hash
                                ps.map{ |k, v|
-                                 o = {}
-                                 o['package'] = k
-                                 v.each{ |f, val|
-                                   o[f] = val
-                                 }
-                                 o
+                                 v.merge({ 'package' => k })
                                }
                              else
                                ps.map{ |k, v|
@@ -1965,12 +1988,8 @@ class EnvVarRequirement < CWLObject
                   }
                 else
                   defs.map{ |k, v|
-                    d = {}
-                    d['envName'] = k
-                    v.each{ |f, val|
-                      d[f] = val
-                    }
-                    EnvironmentDef.load(d, dir, frags)
+                    EnvironmentDef.load(v.merge({ 'envName' => k }),
+                                        dir, frags)
                   }
                 end
               end
@@ -2380,12 +2399,7 @@ class Workflow < CWLObject
                           'type' => v,
                         }
                       else
-                        o = {}
-                        o['id'] = k
-                        v.each{ |f, val|
-                          o[f] = val
-                        }
-                        o
+                        v.merge({ 'id' => k })
                       end
                   InputParameter.load(o, dir, frags)
                 }
@@ -2405,12 +2419,7 @@ class Workflow < CWLObject
                            'type' => v,
                          }
                        else
-                         o = {}
-                         o['id'] = k
-                         v.each{ |f, val|
-                           o[f] = val
-                         }
-                         o
+                         v.merge({ 'id' => k })
                        end
                    WorkflowOutputParameter.load(o, dir, frags)
                  }
@@ -2422,12 +2431,8 @@ class Workflow < CWLObject
                }
              else
                obj['steps'].map{ |k, v|
-                 o = {}
-                 o['id'] = k
-                 v.each{ |f, val|
-                   o[f] = val
-                 }
-                 WorkflowStep.load(o, dir, frags)
+                 WorkflowStep.load(v.merge({ 'id' => k }),
+                                   dir, frags)
                }
              end
     @id = obj.fetch('id', nil)
@@ -2435,12 +2440,7 @@ class Workflow < CWLObject
              obj.fetch('requirements', [])
            else
              obj['requirements'].map{ |k, v|
-               o = {}
-               o['class'] = k
-               v.each{ |f, val|
-                 o[f] = val
-               }
-               o
+               v.merge({ 'class' => k })
              }
            end
     @requirements = reqs.map{ |r|
@@ -2451,12 +2451,7 @@ class Workflow < CWLObject
               obj.fetch('hints', [])
             else
               obj['hints'].map{ |k, v|
-                o = {}
-                o['class'] = k
-                v.each{ |f, val|
-                  o[f] = val
-                }
-                o
+                v.merge({ 'class' => k })
               }
             end
     @hints = hints.map{ |h|
@@ -2681,9 +2676,25 @@ class OutputRecordSchema < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @type = obj['type']
-    @fields = obj.fetch('fields', []).map{ |f|
-      OutputRecordField.load(f, dir, frags)
-    }
+    @fields = if obj.fetch('fields', []).instance_of? Array
+                obj.fetch('fields', []).map{ |f|
+                  OutputRecordField.load(f, dir, frags)
+                }
+              else
+                obj.map{ |k, v|
+                  o = if v.instance_of? String or
+                        v.instance_of? Array or
+                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                        {
+                          'name' => k,
+                          'type' => v,
+                        }
+                      else
+                        v.merge({ 'name' => k })
+                      end
+                  OutputRecordField.load(o, dir, frags)
+                }
+              end
     @label = obj.fetch('label', nil)
   end
 
@@ -2850,12 +2861,7 @@ class WorkflowStep < CWLObject
                       'source' => v,
                     }
                   else
-                    o = {}
-                    o['id'] = k
-                    v.each{ |f, val|
-                      o[f] = val
-                    }
-                    o
+                    v.merge({ 'id' => k })
                   end
               WorkflowStepInput.load(o, dir, frags)
             }
@@ -2876,12 +2882,7 @@ class WorkflowStep < CWLObject
              obj.fetch('requirements', [])
            else
              obj['requirements'].map{ |k, v|
-               o = {}
-               o['class'] = k
-               v.each{ |f, val|
-                 o[f] = val
-               }
-               o
+               v.merge({ 'class' => k })
              }
            end
     @requirements = reqs.map{ |r|
@@ -2892,12 +2893,7 @@ class WorkflowStep < CWLObject
               obj.fetch('hints', [])
             else
               obj['hints'].map{ |k, v|
-                o = {}
-                o['class'] = k
-                v.each{ |f, val|
-                  o[f] = val
-                }
-                o
+                v.merge({ 'class' => k })
               }
             end
     @hints = hints.map{ |h|
@@ -3242,12 +3238,7 @@ class ExpressionTool < CWLObject
                           'type' => v,
                         }
                       else
-                        o = {}
-                        o['id'] = k
-                        v.each{ |f, val|
-                          o[f] = val
-                        }
-                        o
+                        v.merge({ 'id' => k })
                       end
                   InputParameter.load(o, dir, frags)
                 }
@@ -3266,12 +3257,7 @@ class ExpressionTool < CWLObject
                           'type' => v,
                         }
                       else
-                        o = {}
-                        o['id'] = k
-                        v.each{ |f, val|
-                          o[f] = val
-                        }
-                        o
+                        v.merge({ 'id' => k })
                       end
                   ExpressionToolOutputParameter.load(o, dir, frags)
                 }
@@ -3283,12 +3269,7 @@ class ExpressionTool < CWLObject
              obj.fetch('requirements', [])
            else
              obj['requirements'].map{ |k, v|
-               o = {}
-               o['class'] = k
-               v.each{ |f, val|
-                 o[f] = val
-               }
-               o
+               v.merge({ 'class' => k })
              }
            end
     @requirements = reqs.map{ |r|
@@ -3299,12 +3280,7 @@ class ExpressionTool < CWLObject
               obj.fetch('hints', [])
             else
               obj['hints'].map{ |k, v|
-                o = {}
-                o['class'] = k
-                v.each{ |f, val|
-                  o[f] = val
-                }
-                o
+                v.merge({ 'class' => k })
               }
             end
     @hints = hints.map{ |h|
@@ -3628,6 +3604,20 @@ class CWLUnionValue
 
   def to_h
     @value.to_h
+  end
+end
+
+class CWLRecordValue
+  attr_accessor :fields
+
+  def initialize(fields)
+    @fields = fields
+  end
+
+  def to_h
+    fields.transform_values{ |v|
+      v.to_h
+    }
   end
 end
 
