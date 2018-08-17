@@ -183,7 +183,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
         raise CWLInspectionError, "Unsupported type: #{type}"
       end
     when CommandInputRecordSchema
-      raise CWLInspectionError, "Unsupported type: #{type}"
+      raise CWLInspectionError, "Unsupported record type: #{type}"
     when CommandInputEnumSchema
       tmp = pre ? [pre, value] : [value]
       arg1 = walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
@@ -213,7 +213,11 @@ def construct_args(cwl, runtime, inputs, self_)
     i = walk(body, '.position', 0)
     [[i, idx], evaluate_input_binding(cwl, nil, body, runtime, inputs, nil)]
   }+walk(cwl, '.inputs', []).find_all{ |input|
-    walk(input, '.inputBinding', nil)
+    type = walk(input, '.type', nil)
+    walk(input, '.inputBinding', nil) or
+      type.instance_of?(CommandInputRecordSchema) or
+      type.instance_of?(CommandInputEnumSchema) or
+      type.instance_of?(CommandInputArraySchema)
   }.find_all{ |input|
     not inputs[input.id].nil?
   }.map{ |input|
