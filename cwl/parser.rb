@@ -2241,7 +2241,7 @@ def node_bin
   node
 end
 
-def evaluate_js_expression(expression, kind, inputs, runtime, self_)
+def evaluate_js_expression(js_req, expression, kind, inputs, runtime, self_)
   invalids = inputs.select{ |k, v|
     v.instance_of? InvalidVariable
   }
@@ -2255,13 +2255,14 @@ def evaluate_js_expression(expression, kind, inputs, runtime, self_)
           "(function() { #{expression.gsub(/\\/){ '\\\\' }.gsub(/\n/, '\n')} })()"
         end
   exp = exp.gsub(/"/, '\"')
+  libstr = js_req.expressionLib ? js_req.expressionLib.join(";\n") : ''
   replaced_inputs = Hash[inputs.map{ |k, v|
                            [k, v.to_h]
                          }]
   cmdstr = <<-EOS
   'use strict'
   try{
-    const exp = "#{exp}";
+    const exp = "#{libstr}\\n#{exp}";
     process.stdout.write(JSON.stringify(require('vm').runInNewContext(exp, {
       'runtime': #{JSON.dump(runtime.reject{ |k, _| k == 'docdir' })},
       'inputs': #{JSON.dump(replaced_inputs)},
@@ -2297,13 +2298,13 @@ class Expression
     end
   end
 
-  def evaluate(use_js, inputs, runtime, self_ = nil)
+  def evaluate(js_req, inputs, runtime, self_ = nil)
     unless inputs.values.find_index{ |v| v.instance_of? UninstantiatedVariable }.nil?
       return "evaled(#{@expression})"
     end
     expression = @expression.chomp
 
-    rx = use_js ? /\$([({])/ : /\$\(/
+    rx = js_req ? /\$([({])/ : /\$\(/
     exp_parser = ECMAScriptExpressionParser.new
     fun_parser = ECMAScriptFunctionBodyParser.new
     ref_parser = ParameterReferenceParser.new
@@ -2311,7 +2312,7 @@ class Expression
     evaled = nil
     while expression.match rx
       kind = $1 == '(' ? :expression : :body
-      parser = if use_js
+      parser = if js_req
                  case kind
                  when :expression
                    exp_parser
@@ -2326,8 +2327,8 @@ class Expression
         exp = m[:body].to_s
         pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
         post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
-        ret = if use_js
-                evaluate_js_expression(exp, kind, inputs, runtime, self_)
+        ret = if js_req
+                evaluate_js_expression(js_req, exp, kind, inputs, runtime, self_)
               else
                 evaluate_parameter_reference(exp, inputs, runtime, self_)
               end
@@ -2338,7 +2339,7 @@ class Expression
                  end
         expression = post
       rescue Parslet::ParseFailed
-        str = use_js ? 'Javascript expression' : 'parameter reference'
+        str = js_req ? 'Javascript expression' : 'parameter reference'
         raise CWLInspectionError, "Invalid #{str}: #{expression}"
       end
     end
