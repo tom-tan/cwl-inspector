@@ -2202,6 +2202,8 @@ def evaluate_parameter_reference(exp, inputs, runtime, self_)
     obj = inputs[param]
     if rest.nil?
       obj
+    elsif obj.instance_of? InvalidVariable
+      raise CWLInspectionError, "Invalid parameter: inputs.#{param}"
     else
       obj.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
     end
@@ -2240,6 +2242,12 @@ def node_bin
 end
 
 def evaluate_js_expression(expression, kind, inputs, runtime, self_)
+  invalids = inputs.select{ |k, v|
+    v.instance_of? InvalidVariable
+  }
+  unless invalids.empty?
+    raise CWLInspectionError, "Invalid input parameter: #{invalids.keys.join(', ')}"
+  end
   node = node_bin
   exp = if kind == :expression
           "(#{expression.gsub(/\\/){ '\\\\' }})"
@@ -3654,6 +3662,14 @@ def guess_type(value)
 end
 
 class UninstantiatedVariable
+  attr_reader :name
+
+  def initialize(var)
+    @name = var
+  end
+end
+
+class InvalidVariable
   attr_reader :name
 
   def initialize(var)

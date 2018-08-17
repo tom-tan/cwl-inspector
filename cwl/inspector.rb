@@ -392,11 +392,15 @@ def parse_inputs(cwl, inputs, docdir)
            [inp.id, UninstantiatedVariable.new("$#{inp.id}")]
          }]
   else
-    Hash[walk(cwl, '.inputs', []).map{ |inp|
-           [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
-                                 inp.default, walk(inp, '.inputBinding.loadContents', false),
-                                 docdir)]
-         }]
+    invalids = Hash[(inputs.keys-walk(cwl, '.inputs', []).map{ |inp| inp.id }).map{ |k|
+                      [k, InvalidVariable.new(k)]
+                    }]
+    valids = Hash[walk(cwl, '.inputs', []).map{ |inp|
+                    [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
+                                          inp.default, walk(inp, '.inputBinding.loadContents', false),
+                                          docdir)]
+                  }]
+    invalids.merge(valids)
   end
 end
 
