@@ -377,7 +377,7 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   runtime
 end
 
-def parse_inputs(cwl, inputs, docdir, strict = true)
+def parse_inputs(cwl, inputs, docdir)
   input_not_required = walk(cwl, '.inputs', []).all?{ |inp|
     (inp.type.class == CommandInputUnionSchema and
       inp.type.types.find_index{ |obj|
@@ -395,12 +395,12 @@ def parse_inputs(cwl, inputs, docdir, strict = true)
     Hash[walk(cwl, '.inputs', []).map{ |inp|
            [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
                                  inp.default, walk(inp, '.inputBinding.loadContents', false),
-                                 docdir, strict)]
+                                 docdir)]
          }]
   end
 end
 
-def parse_object(id, type, obj, default, loadContents, docdir, strict)
+def parse_object(id, type, obj, default, loadContents, docdir)
   if type.nil?
     type = guess_type(obj)
   elsif type.instance_of?(CWLType) and type.type == 'Any'
@@ -448,41 +448,35 @@ def parse_object(id, type, obj, default, loadContents, docdir, strict)
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
       file = obj.nil? ? default : CWLFile.load(obj, docdir, {})
-      file.evaluate(docdir, loadContents, strict)
+      file.evaluate(docdir, loadContents)
     when 'Directory'
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
       dir = obj.nil? ? default : Directory.load(obj, docdir, {})
-      dir.evaluate(docdir, nil, strict)
+      dir.evaluate(docdir, nil)
     end
   when CommandInputUnionSchema
     idx = type.types.find_index{ |t|
       begin
-        parse_object(id, t, obj, default, loadContents, docdir, strict)
+        parse_object(id, t, obj, default, loadContents, docdir)
         true
       rescue CWLInspectionError
         false
       end
     }
     if idx.nil?
-      raise CWLInspectionError, "Invalid object: #{obj}"
+      raise CWLInspectionError, "Invalid object: #{obj} of type #{type.to_h}"
     end
     CWLUnionValue.new(type.types[idx],
                       parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
-                                   loadContents, docdir, strict))
+                                   loadContents, docdir))
   when CommandInputRecordSchema
-    raise CWLInspectionError, "Record types are not supported: #{type.class}"
-    # unless obj.instance_of? Hash
-    #   raise CWLInspectionError, "#{input.id} must be a record type of #{input.type.fields.map{ |f| f.type}.join(', ')}"
-    # end
-    # fields = input.fields
-    # Hash[fields.map{ |f|
-    #   unless obj.include? f.name
-    #     raise CWLInspectionError, "#{input.id} must have a record `#{f.name}`"
-    #   end
-    #   [f.name, parse_object("id.#{f.name}", f.type, obj[f.name], nil, loadContents, runtime)]
-    # }]
+    obj = obj.nil? ? default : obj
+    CWLRecordValue.new(Hash[type.fields.map{ |f|
+                              [f.name, parse_object(nil, f.type, obj.fetch(f.name, nil), nil,
+                                                    loadContents, docdir)]
+                            }])
   when CommandInputEnumSchema
     raise CWLInspectionError, "Enum types are not supported: #{type.class}"
     # unless obj.instance_of?(String) and input.symbols.include? obj
@@ -495,7 +489,7 @@ def parse_object(id, type, obj, default, loadContents, docdir, strict)
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
     end
     obj.map{ |o|
-      parse_object(id, t, o, nil, loadContents, docdir, strict)
+      parse_object(id, t, o, nil, loadContents, docdir)
     }
   else
     raise CWLInspectionError, "Unsupported type: #{type.class}"
@@ -514,7 +508,7 @@ def list(cwl, runtime, inputs)
     }
     Hash[json.each.map{ |k, v|
            [k,
-            parse_object(k, nil, v, nil, false, runtime['docdir'].first, true).to_h]
+            parse_object(k, nil, v, nil, false, runtime['docdir'].first).to_h]
          }]
   else
     Hash[walk(cwl, '.outputs', []).map { |o|
@@ -587,7 +581,7 @@ def list_(cwl, output, runtime, inputs)
         end
       }
     }.flatten.map{ |f|
-      f.evaluate(runtime['docdir'].first, loadContents, false)
+      f.evaluate(runtime['docdir'].first, loadContents)
     }.sort_by{ |f| f.basename }
     evaled = if oBinding.outputEval
                oBinding.outputEval.evaluate(use_js, inputs, runtime, files)
@@ -613,7 +607,6 @@ end
 if $0 == __FILE__
   format = :yaml
   inp_obj = nil
-  strict = true
   outdir = File.absolute_path Dir.pwd
   tmpdir = '/tmp'
   opt = OptionParser.new
@@ -623,9 +616,6 @@ if $0 == __FILE__
   }
   opt.on('-y', '--yaml', 'Print result in YAML format (default)') {
     format = :yaml
-  }
-  opt.on('--no-strict', 'Does not check properties for File and Directory objects') {
-    strict = false
   }
   opt.on('-i=INPUT', 'Job parameter file for `commandline`') { |inp|
     inp_obj = if inp.end_with? '.json'
@@ -666,8 +656,7 @@ if $0 == __FILE__
           CommonWorkflowLanguage.load_file(file)
         end
   inputs = parse_inputs(cwl, inp_obj,
-                        file == '-' ? Dir.pwd : File.dirname(File.expand_path file),
-                        strict)
+                        file == '-' ? Dir.pwd : File.dirname(File.expand_path file))
   runtime = eval_runtime(file, inputs, outdir, tmpdir)
 
   ret = case cmd

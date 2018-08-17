@@ -753,7 +753,7 @@ class CWLFile < CWLObject
 
   def self.load(obj, dir, frags)
     file = self.new(obj, dir, frags)
-    file.evaluate(dir, false, false)
+    file.evaluate(dir, false)
   end
 
   def initialize(obj, dir, frags)
@@ -783,7 +783,7 @@ class CWLFile < CWLObject
     @contents = nil
   end
 
-  def evaluate(docdir, loadContents = false, strict = true)
+  def evaluate(docdir, loadContents = false)
     file = self.dup
     location = @location.nil? ? @path : @location
     if location.nil?
@@ -799,9 +799,6 @@ class CWLFile < CWLObject
                                  scheme, path = $1, $2
                                  case scheme
                                  when 'file:'
-                                   unless File.exist? path
-                                     raise CWLInspectionError, "File not found: #{location}" if strict
-                                   end
                                    [location, path]
                                  when 'http:', 'https:', 'ftp:'
                                    raise CWLInspectionError, "Unsupported scheme: #{scheme}"
@@ -810,9 +807,6 @@ class CWLFile < CWLObject
                                  end
                                else
                                  path = File.expand_path(location, docdir)
-                                 unless File.exist? path
-                                   raise CWLInspectionError, "File not found: file://#{path}" if strict
-                                 end
                                  ['file://'+path, path]
                                end
     file.basename = File.basename file.path
@@ -825,7 +819,7 @@ class CWLFile < CWLObject
       file.size = File.size(file.path)
     end
     file.secondaryFiles = @secondaryFiles.map{ |sf|
-      sf.evaluate(docdir, loadContents, strict)
+      sf.evaluate(docdir, loadContents)
     }
     file.contents = if @contents
                       @contents
@@ -869,7 +863,7 @@ class Directory < CWLObject
 
   def self.load(obj, dir, frags)
     d = self.new(obj, dir, frags)
-    d.evaluate(dir, false, false)
+    d.evaluate(dir, false)
   end
 
   def initialize(obj, dir, frags)
@@ -892,7 +886,7 @@ class Directory < CWLObject
     }
   end
 
-  def evaluate(docdir, loadContents = false, strict = true)
+  def evaluate(docdir, loadContents = false)
     dir = self.dup
     location = @location.nil? ? @path : @location
     if @location.nil?
@@ -916,9 +910,6 @@ class Directory < CWLObject
                                    raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                  end
                                else
-                                 unless Dir.exist? location
-                                   raise CWLInspectionError, "Directory not found: #{location}" if strict
-                                 end
                                  path = File.expand_path(location, docdir)
                                  ['file://'+path, path]
                                end
@@ -931,19 +922,19 @@ class Directory < CWLObject
                                  'class' => 'Directory',
                                  'location' => 'file://'+path,
                                }, docdir, {})
-            d.evaluate(docdir, false, strict)
+            d.evaluate(docdir, false)
           else
             f = CWLFile.load({
                                'class' => 'File',
                                'location' => 'file://'+path,
                              }, docdir, {})
-            f.evaluate(docdir, false, strict)
+            f.evaluate(docdir, false)
           end
         }
       end
     else
       dir.listing = @listing.map{ |lst|
-        lst.evaluate(docdir, loadContents, strict)
+        lst.evaluate(docdir, loadContents)
       }
     end
     dir
@@ -3574,7 +3565,10 @@ class InputParameter
         Directory.load(obj, dir, frags)
       end
     when CommandInputRecordSchema, InputRecordSchema
-      raise CWLParseError, "Unsupported type: #{type.class}"
+      CWLRecordValue.new(
+        Hash[type.fields.map{ |f|
+               [f.name, self.parse_object(f.type, obj[f.name], dir, frags)]
+             }])
     when CommandInputArraySchema, InputArraySchema
       t = type.items
       unless obj.instance_of? Array
