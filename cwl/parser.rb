@@ -2209,13 +2209,10 @@ def evaluate_parameter_reference(exp, inputs, runtime, self_)
     end
   when /^self(.+)$/
     rest = $1
-    if rest.start_with? '.'
-      rest = rest[1..-1]
-    end
     if self_.nil?
       raise CWLInspectionError, "Unknown context for self in the expression: #{exp}"
     end
-    if rest.nil?
+    if rest.empty?
       self_
     else
       self_.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
@@ -3624,8 +3621,20 @@ class CWLRecordValue
     @fields = fields
   end
 
+  def walk(path)
+    if path.empty?
+      self
+    else
+      f = path.first
+      unless @fields.include? f
+        raise CWLInspectionError, "No such field: #{f}"
+      end
+      @fields[f].walk(path[1..-1])
+    end
+  end
+
   def to_h
-    fields.transform_values{ |v|
+    @fields.transform_values{ |v|
       v.to_h
     }
   end
