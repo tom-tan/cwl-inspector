@@ -296,7 +296,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
     },
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
-  shellargs = [*envArgs, '/bin/bash', '-c', "'#{command.join(' ').gsub(/'/) { "'\\''" }}'"]
+  shellargs = [*envArgs, '/bin/bash', '-c', "'cd ~ && #{command.join(' ').gsub(/'/) { "'\\''" }}'"]
 
   [
     *container_cmd,
