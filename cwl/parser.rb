@@ -3659,7 +3659,15 @@ def guess_type(value)
     when 'Direcotry'
       CWLType.load('Directory', nil, {})
     else
-      raise CWLInspectionError, "Unsupported value: #{value}"
+      CommandInputRecordSchema.load({
+                                      'type' => 'record',
+                                      'fields' => value.each.map{ |k, v|
+                                        {
+                                          'name' => k,
+                                          'type' => guess_type(v).to_h,
+                                        }
+                                      }
+                                    }, nil, {})
     end
   when Array
     CommandInputArraySchema.load({
