@@ -211,7 +211,7 @@ class CommonWorkflowLanguage
     when 'ExpressionTool'
       ExpressionTool.load(obj, dir, frags)
     else
-      raise CWLParseError, 'Cannot parse as #{self}'
+      raise CWLParseError, "Cannot parse as #{self}"
     end
   end
 end
