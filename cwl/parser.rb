@@ -2195,30 +2195,37 @@ class ResourceRequirement < CWLObject
 end
 
 def evaluate_parameter_reference(exp, inputs, runtime, self_)
-  case exp
-  when /^inputs\.(.+)$/
-    body = $1
-    param, rest = body.match(/([^.]+)(\..+)?$/).values_at(1, 2)
-    obj = inputs[param]
-    if rest.nil?
-      obj
-    elsif obj.instance_of? InvalidVariable
-      raise CWLInspectionError, "Invalid parameter: inputs.#{param}"
+  path = exp.split(/\.|\]\[|\[|\]\.?/).map{ |e|
+    if e.start_with?("\'") or e.start_with?("\"")
+      e[1...-1]
     else
-      obj.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+      e
     end
-  when /^self(.+)$/
-    rest = $1
+  }.map{ |e|
+    e.gsub(/\\'/, "'").gsub(/\\"/, "\"")
+  }
+  case path.first
+  when 'inputs'
+    if path[1..-1].empty?
+      inputs
+    else
+      attr = path[1]
+      unless inputs.include? attr
+        raise CWLInspectionError, "Invalid parameter: inputs.#{attr}"
+      end
+      inputs[attr].walk(path[2..-1])
+    end
+  when 'self'
     if self_.nil?
       raise CWLInspectionError, "Unknown context for self in the expression: #{exp}"
     end
-    if rest.empty?
+    if path[1..-1].empty?
       self_
     else
-      self_.walk(rest[1..-1].split(/\.|\[|\]\.|\]/))
+      self_.walk(path[1..-1])
     end
-  when /^runtime\.(.+)$/
-    attr = $1
+  when 'runtime'
+    attr = path[1]
     if runtime.reject{ |k, _| k == 'docdir' }.include? attr
       runtime[attr]
     else
@@ -3623,7 +3630,7 @@ class CWLRecordValue
 
   def walk(path)
     if path.empty?
-      self
+      @fields
     else
       f = path.first
       unless @fields.include? f

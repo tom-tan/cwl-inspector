@@ -8,10 +8,10 @@ class ParameterReferenceParser < Parslet::Parser
     match(/[[:alnum:]_]/).repeat(1)
   }
   rule(:singleq) {
-    str("['") >> (str("'").absent? >> match(/./) | str("\\'")).repeat >> str("']")
+    str("['") >> (match(/[^'\\]/) | str("\\\'")).repeat >> str("']")
   }
   rule(:doubleq) {
-    str('["') >> (str('"').absent? >> match(/./) | str('\\"')).repeat >> str('"]')
+    str('["') >> (match(/[^"\\]/) | str("\\\"")).repeat >> str('"]')
   }
   rule(:index) {
     str('[') >> match(/[0-9]+/) >> str(']')
