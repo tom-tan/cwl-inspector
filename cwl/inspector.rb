@@ -150,7 +150,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
 
   pre = walk(binding_, '.prefix')
   if value.instance_of? UninstantiatedVariable
-    name = shellQuote ? "'#{self_.name}'" : self_.name
+    name = shellQuote ? %!"#{self_.name}"! : self_.name
     tmp = pre ? [pre, name] : [name]
     walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
   else
@@ -172,11 +172,11 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
         tmp = pre ? [pre, value] : [value]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       when 'string'
-        val = shellQuote ? "'#{value}'" : value
+        val = shellQuote ? %!"#{value}"! : value
         tmp = pre ? [pre, val] : [val]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       when 'File'
-        tmp = pre ? [pre, "'#{value.path}'"] : ["'#{value.path}'"]
+        tmp = pre ? [pre, %!"#{value.path}"!] : [%!"#{value.path}"!]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       # when 'Directory'
       else
@@ -282,27 +282,21 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
                  end
   envArgs = if docker_requirement(cwl).nil?
               req = get_requirement(cwl, 'EnvVarRequirement')
-              (req ? req.envDef : []).map{ |e|
+              ['env', "HOME='#{runtime['outdir']}'", "TMPDIR='#{runtime['tmpdir']}'"]+(req ? req.envDef : []).map{ |e|
                 val = e.envValue.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                           inputs, runtime, nil)
-                "#{e.envName}='#{val}';"
+                "#{e.envName}='#{val}'"
               }
             else
               []
             end
   command = [
-    *envArgs,
     *walk(cwl, '.baseCommand', []).map{ |cmd|
-      "\"#{cmd}\""
+      %!"#{cmd}"!
     },
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
-  shellargs = if get_requirement(cwl, 'ShellCommandRequirement')
-                ['/bin/sh', '-c', "\"#{command.join(' ').gsub(/"/) { '\\"' }}\""]
-              else
-                command
-              end
-
+  shellargs = [*envArgs, '/bin/sh', '-c', "'#{command.join(' ').gsub(/'/) { "'\\''" }}'"]
 
   [
     *container_cmd,
