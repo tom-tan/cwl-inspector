@@ -296,7 +296,16 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
     },
     *construct_args(cwl, runtime, replaced_inputs, self_),
   ]
-  shellargs = [*envArgs, '/bin/bash', '-c', "'cd ~ && #{command.join(' ').gsub(/'/) { "'\\''" }}'"]
+  shell = case RUBY_PLATFORM
+          when /darwin|mac os/
+            # sh in macOS has an issue in the `echo` command.
+            docker_requirement(cwl).nil? ? '/bin/bash' : '/bin/sh'
+          when /linux/
+            '/bin/sh'
+          else
+            raise "Unsupported platform: #{RUBY_PLATFORM}"
+          end
+  shellargs = [*envArgs, shell, '-c', "'cd ~ && #{command.join(' ').gsub(/'/) { "'\\''" }}'"]
 
   [
     *container_cmd,
