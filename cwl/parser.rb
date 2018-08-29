@@ -130,6 +130,20 @@ class FalseClass
   end
 end
 
+class Symbol
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+
+  def to_h
+    self.to_s
+  end
+end
+
 class Array
   def walk(path)
     if path.empty?
@@ -3582,6 +3596,11 @@ class InputParameter
         Hash[type.fields.map{ |f|
                [f.name, self.parse_object(f.type, obj[f.name], dir, frags)]
              }])
+    when CommandInputEnumSchema
+      unless obj.instance_of?(String) and type.symbols.include? obj
+        raise CWLInspectionError, 'CommandInputEnumSchema is not suppported'
+      end
+      obj.to_sym
     when CommandInputArraySchema, InputArraySchema
       t = type.items
       unless obj.instance_of? Array
@@ -3604,6 +3623,8 @@ class InputParameter
       end
       CWLUnionValue.new(type.types[idx],
                         self.parse_object(type.types[idx], obj, dir, frags))
+    else
+      raise CWLInspectionError, "Unknown type: #{type.class}"
     end
   end
 end

@@ -108,7 +108,15 @@ def dockerized(input, type, vardir)
       [input, []]
     end
   when CommandInputRecordSchema
-    raise CWLInspectionError, "Unsupported"
+    vols = []
+    kvs = []
+    input.fields.each{ |k, v|
+      idx = type.fields.find_index{ |f| f.name == k }
+      inp, vol = dockerized(v, type.fields[idx], vardir)
+      kvs.push([k, inp])
+      vols.push(*vols)
+    }
+    [CWLRecordValue.new(Hash[kvs]), vols]
   when CommandInputEnumSchema
     [input, []]
   when CommandInputArraySchema
@@ -489,11 +497,10 @@ def parse_object(id, type, obj, default, loadContents, docdir)
                                                     loadContents, docdir)]
                             }])
   when CommandInputEnumSchema
-    raise CWLInspectionError, "Enum types are not supported: #{type.class}"
-    # unless obj.instance_of?(String) and input.symbols.include? obj
-    #   raise CWLInspectionError, "#{input.id} requires must be #{input.symbols.join(', ')}"
-    # end
-    # obj
+    unless obj.instance_of?(String) and type.symbols.include? obj
+      raise CWLInspectionError, "Unknown enum value #{obj}: valid values are #{type.symbols}"
+    end
+    obj.to_sym
   when CommandInputArraySchema
     t = type.items
     unless obj.instance_of? Array
