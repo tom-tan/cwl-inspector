@@ -92,8 +92,8 @@ def include_resource(uri, basedir)
   end
 end
 
-def fragments(cwl)
-  obj = preprocess(cwl)
+def fragments(obj)
+  obj = preprocess(obj) if obj.instance_of? String
   collect_fragments(obj)
 end
 
@@ -142,7 +142,7 @@ if $0 == __FILE__
 
   cwl = ARGV.pop
   obj = if return_fragment
-          fragments(cwl)
+          fragments(preprocess(cwl))
         else
           preprocess(cwl)
         end

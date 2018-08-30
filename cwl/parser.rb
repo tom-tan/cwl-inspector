@@ -205,9 +205,13 @@ class Array
 end
 
 class CommonWorkflowLanguage
-  def self.load_file(file)
-    obj = preprocess(file)
-    frags = fragments(file)
+  def self.load_file(file, do_preprocess = true)
+    obj = if do_preprocess
+            preprocess(file)
+          else
+            YAML.load_file(file.sub(/#.*/, ''))
+          end
+    frags = fragments(obj)
     obj = if file.match(/^.+#(.+)$/)
             frags[$1]
           else
