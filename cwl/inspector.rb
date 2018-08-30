@@ -627,6 +627,7 @@ if $0 == __FILE__
   inp_obj = nil
   outdir = File.absolute_path Dir.pwd
   tmpdir = '/tmp'
+  do_preprocess = true
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} [options] cwl cmd"
   opt.on('-j', '--json', 'Print result in JSON format') {
@@ -650,6 +651,9 @@ if $0 == __FILE__
   opt.on('--tmpdir=dir') { |dir|
     tmpdir = File.expand_path dir
   }
+  opt.on('--without-preprocess') {
+    do_preprocess = false
+  }
   opt.parse!(ARGV)
 
   unless ARGV.length == 2
@@ -671,7 +675,7 @@ if $0 == __FILE__
   cwl = if file == '-'
           CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd)
         else
-          CommonWorkflowLanguage.load_file(file)
+          CommonWorkflowLanguage.load_file(file, do_preprocess)
         end
   inputs = parse_inputs(cwl, inp_obj,
                         file == '-' ? Dir.pwd : File.dirname(File.expand_path file))
