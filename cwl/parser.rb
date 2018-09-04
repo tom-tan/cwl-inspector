@@ -438,9 +438,7 @@ class CommandLineTool < CWLObject
       out.to_h
     }
     ret['class'] = @class_
-    unless @id.nil?
-      ret['id'] = @id
-    end
+    ret['id'] = @id unless @id.nil?
 
     unless @requirements.empty?
       ret['requirements'] = @requirements.map{ |req|
@@ -537,15 +535,13 @@ class CommandInputParameter < CWLObject
       }
     end
     ret['streamable'] = @streamable if @streamable
-    ret['doc'] = @doc if @doc.nil? or @doc.empty?
+    ret['doc'] = @doc unless @doc.nil? or @doc.empty?
     unless @format.empty?
       ret['format'] = @format.map{ |f|
         f.to_h
       }
     end
-    unless @inputBinding.nil?
-      ret['inputBinding'] = @inputBinding.to_h
-    end
+    ret['inputBinding'] = @inputBinding.to_h unless @inputBinding.nil?
     ret['default'] = @default.to_h unless @default.nil?
     ret['type'] = @type.to_h unless @type.nil?
     ret
@@ -1874,12 +1870,8 @@ class SoftwarePackage < CWLObject
   def to_h
     ret = {}
     ret['package'] = @package
-    unless @version.empty?
-      ret['version'] = @version
-    end
-    unless @specs.empty?
-      ret['specs'] = @specs
-    end
+    ret['version'] = @version unless @version.empty?
+    ret['specs'] = @specs unless @specs.empty?
     ret
   end
 end
@@ -2547,9 +2539,7 @@ class Workflow < CWLObject
     ret['steps'] = @steps.map{ |st|
       st.to_h
     }
-    unless @id.nil?
-      ret['id'] = @id
-    end
+    ret['id'] = @id unless @id.nil?
 
     unless @requirements.empty?
       ret['requirements'] = @requirements.map{ |r|
@@ -2563,17 +2553,9 @@ class Workflow < CWLObject
       }
     end
 
-    unless @label.nil?
-      ret['label'] = @label
-    end
-
-    unless @doc.nil?
-      ret['doc'] = @doc
-    end
-
-    unless @cwlVersion.nil?
-      ret['cwlVersion'] = @cwlVersion
-    end
+    ret['label'] = @label unless @label.nil?
+    ret['doc'] = @doc unless @doc.nil?
+    ret['cwlVersion'] = @cwlVersion unless @cwlVersion.nil?
     ret
   end
 end
@@ -2634,10 +2616,7 @@ class WorkflowOutputParameter < CWLObject
   def to_h
     ret = {}
     ret['id'] = @id
-
-    unless @label.nil?
-      ret['label'] = @label
-    end
+    ret['label'] = @label unless @label.nil?
 
     unless @secondaryFiles.empty?
       ret['secondaryFiles'] = @secondaryFiles.map{ |s|
@@ -2645,34 +2624,13 @@ class WorkflowOutputParameter < CWLObject
       }
     end
 
-    if @streamable
-      ret['streamable'] = @streamable
-    end
-
-    unless @doc.nil?
-      ret['doc'] = @doc
-    end
-
-    unless @outputBinding.nil?
-      ret['outputBinding'] = @outputBinding.to_h
-    end
-
-    unless @format.nil?
-      ret['format'] = @format.to_h
-    end
-
-    unless @outputSource.empty?
-      ret['outputSource'] = @outputSource
-    end
-
-    unless @linkMerge != 'merge_nested'
-      ret['linkMerge'] = @linkMerge
-    end
-
-    unless @type.nil?
-      ret['type'] = @type.to_h
-    end
-
+    ret['streamable'] = @streamable if @streamable
+    ret['doc'] = @doc unless @doc.nil?
+    ret['outputBinding'] = @outputBinding.to_h unless @outputBinding.nil?
+    ret['format'] = @format.to_h unless @format.nil?
+    ret['outputSource'] = @outputSource unless @outputSource.empty?
+    ret['linkMerge'] = @linkMerge unless @linkMerge != 'merge_nested'
+    ret['type'] = @type.to_h unless @type.nil?
     ret
   end
 end
@@ -2805,12 +2763,8 @@ class OutputEnumSchema < CWLObject
     ret = {}
     ret['symbols'] = @symbols
     ret['type'] = @type
-    unless @label.nil?
-      ret['label'] = @label
-    end
-    unless @outputBinding.nil?
-      ret['outputBinding'] = @outputBinding.to_h
-    end
+    ret['label'] = @label unless @label.nil?
+    ret['outputBinding'] = @outputBinding.to_h unless @outputBinding.nil?
     ret
   end
 end
@@ -2845,12 +2799,8 @@ class OutputArraySchema < CWLObject
     ret = {}
     ret['items'] = @items.to_h
     ret['type'] = @type.to_h
-    unless @label.nil?
-      ret['label'] = @label
-    end
-    unless @outputBinding.nil?
-      ret['outputBinding'] = @outputBinding.to_h
-    end
+    ret['label'] = @label unless @label.nil?
+    ret['outputBinding'] = @outputBinding.to_h unless @outputBinding.nil?
     ret
   end
 end
@@ -3004,18 +2954,10 @@ class WorkflowStep < CWLObject
         h.to_i
       }
     end
-    unless @label.nil?
-      ret['label'] = @label
-    end
-    unless @doc.nil?
-      ret['doc'] = @doc
-    end
-    unless @scatter.empty?
-      ret['scatter'] = @scatter
-    end
-    unless @scatterMethod.nil?
-      ret['scatterMethod'] = @scatterMethod
-    end
+    ret['label'] = @label unless @label.nil?
+    ret['doc'] = @doc unless @doc.nil?
+    ret['scatter'] = @scatter unless @scatter.empty?
+    ret['scatterMethod'] = @scatterMethod unless @scatterMethod.nil?
     ret
   end
 end
@@ -3059,18 +3001,10 @@ class WorkflowStepInput < CWLObject
   def to_h
     ret = {}
     ret['id'] = @id
-    unless @source.empty?
-      ret['source'] = @source
-    end
-    unless @linkMerge == 'merge_nested'
-      ret['linkMerge'] = @linkMerge
-    end
-    unless @default.nil?
-      ret['default'] = @default.to_h
-    end
-    unless @valueFrom.nil?
-      ret['valueFrom'] = @valueFrom.to_h
-    end
+    ret['source'] = @source unless @source.empty?
+    ret['linkMerge'] = @linkMerge unless @linkMerge == 'merge_nested'
+    ret['default'] = @default.to_h unless @default.nil?
+    ret['valueFrom'] = @valueFrom.to_h unless @valueFrom.nil?
     ret
   end
 end
@@ -3373,9 +3307,7 @@ class ExpressionTool < CWLObject
     }
     ret['class'] = @class_
     ret['expression'] = @expression.to_h
-    unless @id.nil?
-      ret['id'] = @id
-    end
+    ret['id'] = @id unless @id.nil?
     unless @requirements.empty?
       ret['requirements'] = @requirements.map{ |r|
         r.to_h
@@ -3386,15 +3318,9 @@ class ExpressionTool < CWLObject
         h.to_h
       }
     end
-    unless @label.nil?
-      ret['label'] = @label
-    end
-    unless @doc.nil?
-      ret['doc'] = @doc
-    end
-    unless @cwlVersion.nil?
-      ret['cwlVersion'] = @cwlVersion
-    end
+    ret['label'] = @label unless @label.nil?
+    ret['doc'] = @doc unless @doc.nil?
+    ret['cwlVersion'] = @cwlVersion unless @cwlVersion.nil?
     ret
   end
 end
@@ -3454,32 +3380,20 @@ class InputParameter < CWLObject
   def to_h
     ret = {}
     ret['id'] = @id
-    unless @label.nil?
-      ret['label'] = @label
-    end
+    ret['label'] = @label unless @label.nil?
     unless @secondaryFiles.empty?
       ret['secondaryFiles'] = @secondaryFiles.map{ |s|
         s.to_h
       }
     end
-    if @streamable
-      ret['streamable'] = @streamable
-    end
-    unless @doc.nil?
-      ret['doc'] = @doc
-    end
+    ret['streamable'] = @streamable if @streamable
+    ret['doc'] = @doc unless @doc.nil?
     unless @format.empty?
       ret['format'] = @format.map{ |f| f.to_h }
     end
-    unless @inputBinding.nil?
-      ret['inputBinding'] = @inputBinding.to_h
-    end
-    unless @default.nil?
-      ret['default'] = @default.to_h
-    end
-    unless @type.nil?
-      ret['type'] = @type.to_h
-    end
+    ret['inputBinding'] = @inputBinding.to_h unless @inputBinding.nil?
+    ret['default'] = @default.to_h unless @default.nil?
+    ret['type'] = @type.to_h unless @type.nil?
     ret
   end
 end
@@ -3529,29 +3443,17 @@ class ExpressionToolOutputParameter < CWLObject
   def to_h
     ret = {}
     ret['id'] = @id
-    unless @label.nil?
-      ret['label'] = @label
-    end
+    ret['label'] = @label unless @label.nil?
     unless @secondaryFiles.empty?
       ret['secondaryFiles'] = @secondaryFiles.map{ |s|
         s.to_h
       }
     end
-    if @streamable
-      ret['streamable'] = @streamable
-    end
-    unless @doc.nil?
-      ret['doc'] = @doc
-    end
-    unless @outputBinding.nil?
-      ret['outputBinding'] = @outputBinding.to_h
-    end
-    unless @format.nil?
-      ret['format'] = @format.to_h
-    end
-    unless @type.nil?
-      ret['type'] = @type.to_h
-    end
+    ret['streamable'] = @streamable if @streamable
+    ret['doc'] = @doc unless @doc.nil?
+    ret['outputBinding'] = @outputBinding.to_h unless @outputBinding.nil?
+    ret['format'] = @format.to_h unless @format.nil?
+    ret['type'] = @type.to_h unless @type.nil?
     ret
   end
 end
