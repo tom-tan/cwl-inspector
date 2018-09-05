@@ -3502,7 +3502,7 @@ class InputParameter
         Hash[type.fields.map{ |f|
                [f.name, self.parse_object(f.type, obj[f.name], dir, frags)]
              }])
-    when CommandInputEnumSchema
+    when CommandInputEnumSchema, InputEnumSchema
       unless obj.instance_of?(String) and type.symbols.include? obj
         raise CWLInspectionError, 'CommandInputEnumSchema is not suppported'
       end

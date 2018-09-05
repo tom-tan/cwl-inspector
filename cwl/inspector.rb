@@ -495,18 +495,18 @@ def parse_object(id, type, obj, default, loadContents, docdir)
     CWLUnionValue.new(type.types[idx],
                       parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
                                    loadContents, docdir))
-  when CommandInputRecordSchema
+  when CommandInputRecordSchema, InputRecordSchema
     obj = obj.nil? ? default : obj
     CWLRecordValue.new(Hash[type.fields.map{ |f|
                               [f.name, parse_object(nil, f.type, obj.fetch(f.name, nil), nil,
                                                     loadContents, docdir)]
                             }])
-  when CommandInputEnumSchema
+  when CommandInputEnumSchema, InputEnumSchema
     unless obj.instance_of?(String) and type.symbols.include? obj
       raise CWLInspectionError, "Unknown enum value #{obj}: valid values are #{type.symbols}"
     end
     obj.to_sym
-  when CommandInputArraySchema
+  when CommandInputArraySchema, InputArraySchema
     t = type.items
     unless obj.instance_of? Array
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
