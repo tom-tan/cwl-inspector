@@ -633,6 +633,7 @@ if $0 == __FILE__
   outdir = File.absolute_path Dir.pwd
   tmpdir = '/tmp'
   do_preprocess = true
+  do_eval = false
   opt = OptionParser.new
   opt.banner = "Usage: #{$0} [options] cwl cmd"
   opt.on('-j', '--json', 'Print result in JSON format') {
@@ -659,6 +660,9 @@ if $0 == __FILE__
   opt.on('--without-preprocess') {
     do_preprocess = false
   }
+  opt.on('--evaluate-expressions') {
+    do_eval = true
+  }
   opt.parse!(ARGV)
 
   unless ARGV.length == 2
@@ -677,6 +681,10 @@ if $0 == __FILE__
           ->(a) { JSON.dump(a) }
         end
 
+  if inp_obj.nil? and do_eval
+    raise CWLInspectionError, "--evaluate-expressions needs job file"
+  end
+
   cwl = if file == '-'
           CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd)
         else
@@ -688,7 +696,12 @@ if $0 == __FILE__
 
   ret = case cmd
         when /^\..*/
-          fmt.call walk(cwl, cmd).to_h
+          ret = walk(cwl, cmd)
+          if do_eval
+            ret = ret.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
+                               inputs, runtime)
+          end
+          fmt.call ret.to_h
         when /^keys\((\..*)\)$/
           fmt.call keys(cwl, $1)
         when 'commandline'

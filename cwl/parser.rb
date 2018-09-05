@@ -197,6 +197,12 @@ class Array
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self.map{ |e|
+      e.evaluate(js_req, inputs, runtime, self_)
+    }
+  end
+
   def to_h
     self.map{ |e|
       e.to_h
@@ -239,7 +245,7 @@ class CWLObject
     subclass.class_eval{
       def subclass.cwl_object_preamble(*fields)
         class_variable_set(:@@fields, fields)
-        attr_reader(*fields)
+        attr_accessor(*fields)
       end
 
       def subclass.valid?(obj)
@@ -269,6 +275,10 @@ class CWLObject
       raise CWLInspectionError, "No such field for #{self.class}: #{field}"
     end
     instance_variable_get(f).walk(path)
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    raise 'Unimplemented'
   end
 
   def keys
@@ -429,6 +439,29 @@ class CommandLineTool < CWLObject
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.inputs = @inputs.map{ |inp|
+      inp.evaluate(js_req, inputs, runtime, inputs[inp.id])
+    }
+    ret.outputs = @outputs.map{ |out|
+      out.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.requirements = @requirements.map{ |req|
+      req.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.hints = @hints.map{ |h|
+      h.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.arguments = @arguments.map{ |ar|
+      ar.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.stdin = @stdin.evaluate(js_req, inputs, runtime, self_) unless @stdin.nil?
+    ret.stderr = @stderr.evaluate(js_req, inputs, runtime, self_) unless @stderr.nil?
+    ret.stdout = @stdout.evaluate(js_req, inputs, runtime, self_) unless @stdout.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['inputs'] = @inputs.map{ |input|
@@ -525,6 +558,19 @@ class CommandInputParameter < CWLObject
                end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.secondaryFiles = @secondaryFiles.map{ |sec|
+      sec.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.format = @format.map{ |f|
+      f.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_) unless @type.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['id'] = @id
@@ -571,6 +617,12 @@ class CommandLineBinding < CWLObject
     @shellQuote = obj.fetch('shellQuote', true)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.valueFrom = @valueFrom.evaluate(js_req, inputs, runtime, self_) unless @valueFrom.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['loadContents'] = @loadContents if @loadContents
@@ -601,6 +653,10 @@ class CWLType
     else
       raise CWLParseError, "No such field for #{@type}: #{path}"
     end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -797,6 +853,10 @@ class CWLFile < CWLObject
     @contents = nil
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
+  end
+
   def evaluate(docdir, loadContents = false)
     file = self.dup
     location = @location.nil? ? @path : @location
@@ -900,6 +960,10 @@ class Directory < CWLObject
     }
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
+  end
+
   def evaluate(docdir, loadContents = false)
     dir = self.dup
     location = @location.nil? ? @path : @location
@@ -970,7 +1034,7 @@ class Directory < CWLObject
 end
 
 class CommandInputUnionSchema < CWLObject
-  attr_reader :types
+  attr_accessor :types
 
   def self.load(obj, dir, frags)
     self.new(obj, dir, frags)
@@ -988,6 +1052,14 @@ class CommandInputUnionSchema < CWLObject
 
   def walk(path)
     @types.walk(path)
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.types = @types.map{ |t|
+      t.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
   end
 
   def to_h
@@ -1037,6 +1109,14 @@ class CommandInputRecordSchema < CWLObject
     @name = obj.fetch('name', nil)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.fields = @fields.map{ |f|
+      f.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['type'] = @type
@@ -1077,6 +1157,13 @@ class CommandInputRecordField < CWLObject
     @label = obj.fetch('label', nil)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_)
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['name'] = @name
@@ -1113,6 +1200,12 @@ class CommandInputEnumSchema < CWLObject
                     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['symbols'] = @symbols
@@ -1146,6 +1239,13 @@ class CommandInputArraySchema < CWLObject
     @inputBinding = if obj.include? 'inputBinding'
                       CommandLineBinding.load(obj['inputBinding'], dir, frags)
                     end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.items = @items.evaluate(js_req, inputs, runtime, self_)
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret
   end
 
   def to_h
@@ -1207,6 +1307,17 @@ class CommandOutputParameter < CWLObject
             end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.secondaryFiles = @secondaryFiles.map{ |sec|
+      sec.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret.format = @format.evaluate(js_req, inputs, runtime, self_) unless @format.nil?
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_) unless @type.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['id'] = @id
@@ -1238,6 +1349,10 @@ class Stdout
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
+  end
+
   def to_h
     'stdout'
   end
@@ -1254,6 +1369,10 @@ class Stderr
     else
       raise CWLParseError, "No such field for stderr: #{path}"
     end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -1285,6 +1404,15 @@ class CommandOutputBinding < CWLObject
     @outputEval = if obj.include? 'outputEval'
                     Expression.load(obj['outputEval'], dir, frags)
                   end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.glob = @glob.map{ |g|
+      g.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.outputEval = @outputEval.evaluate(js_req, inputs, runtime, self_) unless @outputEval.nil?
+    ret
   end
 
   def to_h
@@ -1319,6 +1447,14 @@ class CommandOutputUnionSchema < CWLObject
 
   def walk(path)
     @types.walk(path)
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.types = @types.map{ |t|
+      t.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
   end
 
   def to_h
@@ -1368,6 +1504,14 @@ class CommandOutputRecordSchema < CWLObject
     @name = obj.fetch('name', nil)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.fields = @fields.map{ |f|
+      f.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['type'] = @type
@@ -1407,6 +1551,13 @@ class CommandOutputRecordField < CWLObject
                      end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_)
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['name'] = @name
@@ -1440,6 +1591,12 @@ class CommandOutputEnumSchema < CWLObject
     @outputBinding = if obj.include? 'outputBinding'
                        CommandOutputBinding.load(obj['outputBinding'], dir, frags)
                      end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret
   end
 
   def to_h
@@ -1477,6 +1634,13 @@ class CommandOutputArraySchema < CWLObject
                      end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.items = @items.evaluate(js_req, inputs, runtime, self_)
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['items'] = @items.to_h
@@ -1505,6 +1669,10 @@ class InlineJavascriptRequirement < CWLObject
     end
     @class_ = obj['class']
     @expressionLib = obj.fetch('expressionLib', [])
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -1556,6 +1724,14 @@ class SchemaDefRequirement < CWLObject
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.types = @types.map{ |t|
+      t.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['class'] = @class_
@@ -1585,6 +1761,14 @@ class InputUnionSchema < CWLObject
 
   def walk(path)
     @types.walk(path)
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.types = @types.map{ |t|
+      t.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
   end
 
   def to_h
@@ -1634,6 +1818,14 @@ class InputRecordSchema < CWLObject
     @name = obj.fetch('name', nil)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.fields = @fields.map{ |f|
+      f.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['type'] = @type
@@ -1674,6 +1866,13 @@ class InputRecordField < CWLObject
     @label = obj.fetch('label', nil)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_)
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['name'] = @name
@@ -1708,6 +1907,12 @@ class InputEnumSchema < CWLObject
     @inputBinding = if obj.include? 'inputBinding'
                       CommandLineBinding.load(obj['inputBinding'], dir, frags)
                     end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret
   end
 
   def to_h
@@ -1745,6 +1950,13 @@ class InputArraySchema < CWLObject
                     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.items = @items.evaluate(js_req, inputs, runtime, self_)
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['items'] = @items.to_h
@@ -1779,6 +1991,10 @@ class DockerRequirement < CWLObject
     @dockerImport = obj.fetch('dockerImport', nil)
     @dockerImageId = obj.fetch('dockerImageId', nil)
     @dockerOutputDirectory = obj.fetch('dockerOutputDirectory', nil)
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -1834,6 +2050,10 @@ class SoftwareRequirement < CWLObject
                     SoftwarePackage.load(p, dir, frags)
                   }
                 end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -1918,6 +2138,14 @@ class InitialWorkDirRequirement < CWLObject
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.listing = @listing.map{ |lst|
+      lst.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['class'] = @class_
@@ -1949,6 +2177,13 @@ class Dirent < CWLObject
                    Expression.load(obj['entryname'], dir, frags)
                  end
     @writable = obj.fetch('writable', false)
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.entry = @entry.evaluate(js_req, inputs, runtime, self_)
+    ret.entryname = @entryname.evaluate(js_req, inputs, runtime, self_) unless @entryname.nil?
+    ret
   end
 
   def to_h
@@ -2000,6 +2235,14 @@ class EnvVarRequirement < CWLObject
               end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.envDef = @envDef.map{ |e|
+      e.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['class'] = @class_
@@ -2031,6 +2274,12 @@ class EnvironmentDef < CWLObject
     @envValue = Expression.load(obj['envValue'], dir, frags)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.envValue = @envValue.evaluate(js_req, inputs, runtime, self_)
+    ret
+  end
+
   def to_h
     ret = {}
     ret['envName'] = @envName
@@ -2056,6 +2305,10 @@ class ShellCommandRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -2139,6 +2392,51 @@ class ResourceRequirement < CWLObject
                      obj['outdirMax']
                    end
                  end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.coresMin = if @coresMin.instance_of? Expression
+                     @coresMin.evaluate(js_req, inputs, runtime, self_)
+                   else
+                     @coresMin
+                   end
+    ret.coresMax = if @coresMax.instance_of? Expression
+                     @coresMax.evaluate(js_req, inputs, runtime, self_)
+                   else
+                     @coresMax
+                   end
+    ret.ramMin = if @ramMin.instance_of? Expression
+                   @ramMin.evaluate(js_req, inputs, runtime, self_)
+                 else
+                   @ramMin
+                 end
+    ret.ramMax = if @ramMax.instance_of? Expression
+                   @ramMax.evaluate(js_req, inputs, runtime, self_)
+                 else
+                   @ramMax
+                 end
+    ret.tmpdirMin = if @tmpdirMin.instance_of? Expression
+                      @tmpdirMin.evaluate(js_req, inputs, runtime, self_)
+                    else
+                      @tmpdirMin
+                    end
+    ret.tmpdirMax = if @tmpdirMax.instance_of? Expression
+                      @tmpdirMax.evaluate(js_req, inputs, runtime, self_)
+                    else
+                      @tmpdirMax
+                    end
+    ret.outdirMin = if @outdirMin.instance_of? Expression
+                      @outdirMin.evaluate(js_req, inputs, runtime, self_)
+                    else
+                      @outdirMin
+                    end
+    ret.outdirMax = if @outdirMax.instance_of? Expression
+                      @outdirMax.evaluate(js_req, inputs, runtime, self_)
+                    else
+                      @outdirMax
+                    end
+    ret
   end
 
   def to_h
@@ -2527,6 +2825,26 @@ class Workflow < CWLObject
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.inputs = @inputs.map{ |inp|
+      inp.evaluate(js_req, inputs, runtime, inputs[inp.id])
+    }
+    ret.outputs = @outputs.map{ |out|
+      out.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.steps = @steps.map{ |s|
+      s.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.requirements = @requirements.map{ |req|
+      req.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.hints = @hints.map{ |h|
+      h.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['inputs'] = @inputs.map{ |inp|
@@ -2613,6 +2931,17 @@ class WorkflowOutputParameter < CWLObject
             end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.secondaryFiles = @secondaryFiles.map{ |sec|
+      sec.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret.format = @format.evaluate(js_req, inputs, runtime, self_) unless @format.nil?
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_) unless @type.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['id'] = @id
@@ -2685,6 +3014,14 @@ class OutputRecordSchema < CWLObject
     @label = obj.fetch('label', nil)
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.fields = @fields.map{ |f|
+      f.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['type'] = @type
@@ -2723,6 +3060,13 @@ class OutputRecordField < CWLObject
                      end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_)
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['name'] = @name
@@ -2759,6 +3103,12 @@ class OutputEnumSchema < CWLObject
                      end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['symbols'] = @symbols
@@ -2793,6 +3143,13 @@ class OutputArraySchema < CWLObject
     @outputBinding = if obj.include? 'outputBinding'
                        CommandOutputBinding.load(obj['outputBinding'], dir, frags)
                      end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.items = @items.evaluate(js_req, inputs, runtime, self_)
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret
   end
 
   def to_h
@@ -2934,6 +3291,21 @@ class WorkflowStep < CWLObject
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.in = @in.map{ |i|
+      i.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.run = @run.evaluate(js_req, inputs, runtime, self_)
+    ret.requirement = @requirement.map{ |req|
+      req.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.hints = @hints.map{ |h|
+      h.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['id'] = @id
@@ -2998,6 +3370,12 @@ class WorkflowStepInput < CWLObject
                  end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.valueFrom = @valueFrom.evaluate(js_req, inputs, runtime, self_) unless @valueFrom.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['id'] = @id
@@ -3057,6 +3435,10 @@ class UnknownRequirement < CWLObject
     @params = obj
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
+  end
+
   def to_h
     @params
   end
@@ -3079,6 +3461,10 @@ class SubworkflowFeatureRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -3107,6 +3493,10 @@ class ScatterFeatureRequirement < CWLObject
     @class_ = obj['class']
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
+  end
+
   def to_h
     {
       'class' => @class_,
@@ -3133,6 +3523,10 @@ class MultipleInputFeatureRequirement < CWLObject
     @class_ = obj['class']
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
+  end
+
   def to_h
     {
       'class' => @class_,
@@ -3157,6 +3551,10 @@ class StepInputExpressionRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    self
   end
 
   def to_h
@@ -3297,6 +3695,24 @@ class ExpressionTool < CWLObject
     end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.inputs = @inputs.map{ |inp|
+      inp.evaluate(js_req, inputs, runtime, inputs[inp.id])
+    }
+    ret.outputs = @outputs.map{ |out|
+      out.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.expression = @expression.evaluate(js_req, inputs, runtime, self_)
+    ret.requirements = @requirements.map{ |req|
+      req.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.hints = @hints.map{ |h|
+      h.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret
+  end
+
   def to_h
     ret = {}
     ret['inputs'] = @inputs.map{ |inp|
@@ -3377,6 +3793,19 @@ class InputParameter < CWLObject
                end
   end
 
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.secondaryFiles = @secondaryFiles.map{ |sec|
+      sec.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.format = @format.map{ |f|
+      f.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.inputBinding = @inputBinding.evaluate(js_req, inputs, runtime, self_) unless @inputBinding.nil?
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_) unless @type.nil?
+    ret
+  end
+
   def to_h
     ret = {}
     ret['id'] = @id
@@ -3438,6 +3867,17 @@ class ExpressionToolOutputParameter < CWLObject
     @type = if obj.include? 'type'
               CWLOutputType.load(obj['type'], dir, frags)
             end
+  end
+
+  def evaluate(js_req, inputs, runtime, self_ = nil)
+    ret = self.dup
+    ret.secondaryFiles = @secondaryFiles.map{ |sec|
+      sec.evaluate(js_req, inputs, runtime, self_)
+    }
+    ret.outputBinding = @outputBinding.evaluate(js_req, inputs, runtime, self_) unless @outputBinding.nil?
+    ret.format = @format.evaluate(js_req, inputs, runtime, self_) unless @format.nil?
+    ret.type = @type.evaluate(js_req, inputs, runtime, self_) unless @type.nil?
+    ret
   end
 
   def to_h
