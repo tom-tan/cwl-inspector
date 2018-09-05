@@ -265,7 +265,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   if cwl.instance_of? String
     cwl = CommonWorkflowLanguage.load_file(cwl)
   end
-  container_cmd, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
+  container, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
   use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
 
   redirect_in = if walk(cwl, '.stdin')
@@ -313,11 +313,16 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
           else
             raise "Unsupported platform: #{RUBY_PLATFORM}"
           end
-  shellargs = [*envArgs, shell, '-c', "'cd ~ && #{command.join(' ').gsub(/'/) { "'\\''" }}'"]
+  cmd = [
+    docker_requirement(cwl).nil? ? 'cd ~' : nil,
+    command.join(' ').gsub(/'/) { "'\\''" },
+  ].compact.join(' && ')
 
   [
-    *container_cmd,
-    *shellargs,
+    *container,
+    *envArgs,
+    shell, '-c',
+    "'#{cmd}'",
     *redirect_in,
     *redirect_out,
     *redirect_err,
