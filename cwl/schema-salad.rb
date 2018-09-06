@@ -106,9 +106,19 @@ def collect_fragments(obj, acc = {})
     }
   when Hash
     if obj.include?('name')
-      acc[obj['name']] = obj
+      frag = if obj['name'].start_with? '#'
+               obj['name'][1..-1]
+             else
+               obj['name']
+             end
+      acc[frag] = obj
     elsif obj.include?('id')
-      acc[obj['id']] = obj
+      frag = if obj['id'].start_with? '#'
+               obj['id'][1..-1]
+             else
+               obj['id']
+             end
+      acc[frag] = obj
     end
     obj.values.map{ |o|
       collect_fragments(o, acc)
