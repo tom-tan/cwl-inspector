@@ -252,7 +252,11 @@ class CWLObject
         obj.keys.all?{ |k|
           # TODO: check namespaces
           class_variable_get(:@@fields).map{ |m|
-            m == :class_ ? :class : m
+            case m
+            when :class_ then :class
+            when :mixin then '$mixin'
+            else m
+            end
           }.any?{ |f|
             f.to_s == k
           }
@@ -1652,7 +1656,7 @@ class CommandOutputArraySchema < CWLObject
 end
 
 class InlineJavascriptRequirement < CWLObject
-  cwl_object_preamble :class_, :expressionLib
+  cwl_object_preamble :class_, :expressionLib, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -1668,7 +1672,11 @@ class InlineJavascriptRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @expressionLib = obj.fetch('expressionLib', [])
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @expressionLib = obj.fetch('expressionLib', [])
+    end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -1678,20 +1686,24 @@ class InlineJavascriptRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    unless @expressionLib.empty?
-      ret['expressionLib'] = @expressionLib
+    if @mixin.nil?
+      unless @expressionLib.empty?
+        ret['expressionLib'] = @expressionLib
+      end
+    else
+      ret['$mixin'] = @mixin
     end
     ret
   end
 end
 
 class SchemaDefRequirement < CWLObject
-  cwl_object_preamble :class_, :types
+  cwl_object_preamble :class_, :types, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
       obj.fetch('class', 'SchemaDefRequirement') and
-      obj.include? 'types'
+      (obj.include?('$mixin') or obj.include?('types'))
   end
 
   def self.load(obj, dir, frags)
@@ -1703,9 +1715,13 @@ class SchemaDefRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @types = obj['types'].map{ |t|
-      self.class.load_input_type(t, dir, frags)
-    }
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @types = obj['types'].map{ |t|
+        self.class.load_input_type(t, dir, frags)
+      }
+    end
   end
 
   def self.load_input_type(obj, dir, frags)
@@ -1735,9 +1751,13 @@ class SchemaDefRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    ret['types'] = @types.map{ |t|
-      t.to_h
-    }
+    if @mixin.nil?
+      ret['types'] = @types.map{ |t|
+        t.to_h
+      }
+    else
+      ret['$mixin'] = @mixin
+    end
     ret
   end
 end
@@ -1969,7 +1989,7 @@ end
 
 class DockerRequirement < CWLObject
   cwl_object_preamble :class_, :dockerPull, :dockerLoad, :dockerFile,
-                      :dockerImport, :dockerImageId, :dockerOutputDirectory
+                      :dockerImport, :dockerImageId, :dockerOutputDirectory, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -1985,12 +2005,16 @@ class DockerRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @dockerPull = obj.fetch('dockerPull', nil)
-    @dockerLoad = obj.fetch('dockerLoad', nil)
-    @dockerFile = obj.fetch('dockerFile', nil)
-    @dockerImport = obj.fetch('dockerImport', nil)
-    @dockerImageId = obj.fetch('dockerImageId', nil)
-    @dockerOutputDirectory = obj.fetch('dockerOutputDirectory', nil)
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @dockerPull = obj.fetch('dockerPull', nil)
+      @dockerLoad = obj.fetch('dockerLoad', nil)
+      @dockerFile = obj.fetch('dockerFile', nil)
+      @dockerImport = obj.fetch('dockerImport', nil)
+      @dockerImageId = obj.fetch('dockerImageId', nil)
+      @dockerOutputDirectory = obj.fetch('dockerOutputDirectory', nil)
+    end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -2000,23 +2024,27 @@ class DockerRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    ret['dockerPull'] = @dockerPull unless @dockerPull.nil?
-    ret['dockerLoad'] = @dockerLoad unless @dockerLoad.nil?
-    ret['dockerFile'] = @dockerFile unless @dockerFile.nil?
-    ret['dockerImport'] = @dockerImport unless @dockerImport.nil?
-    ret['dockerImageId'] = @dockerImageId unless @dockerImageId.nil?
-    ret['dockerOutputDirectory'] = @dockerOutputDirectory unless @dockerOutputDirectory.nil?
+    if @mixin.nil?
+      ret['dockerPull'] = @dockerPull unless @dockerPull.nil?
+      ret['dockerLoad'] = @dockerLoad unless @dockerLoad.nil?
+      ret['dockerFile'] = @dockerFile unless @dockerFile.nil?
+      ret['dockerImport'] = @dockerImport unless @dockerImport.nil?
+      ret['dockerImageId'] = @dockerImageId unless @dockerImageId.nil?
+      ret['dockerOutputDirectory'] = @dockerOutputDirectory unless @dockerOutputDirectory.nil?
+    else
+      ret['$mixin'] = @mixin
+    end
     ret
   end
 end
 
 class SoftwareRequirement < CWLObject
-  cwl_object_preamble :class_, :packages
+  cwl_object_preamble :class_, :packages, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
       obj.fetch('class', '') == 'SoftwareRequirement' and
-      obj.include? 'packages'
+      (obj.include?('$mixin') or obj.include?('packages'))
   end
 
   def self.load(obj, dir, frags)
@@ -2028,28 +2056,32 @@ class SoftwareRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @packages = if obj['packages'].instance_of? Array
-                  obj['packages'].map{ |p|
-                    SoftwarePackage.load(p, dir, frags)
-                  }
-                else
-                  ps = obj['packages']
-                  packages = if ps.values.first.instance_of? Hash
-                               ps.map{ |k, v|
-                                 v.merge({ 'package' => k })
-                               }
-                             else
-                               ps.map{ |k, v|
-                                 {
-                                   'package' => k,
-                                   'specs' => v,
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @packages = if obj['packages'].instance_of? Array
+                    obj['packages'].map{ |p|
+                      SoftwarePackage.load(p, dir, frags)
+                    }
+                  else
+                    ps = obj['packages']
+                    packages = if ps.values.first.instance_of? Hash
+                                 ps.map{ |k, v|
+                                   v.merge({ 'package' => k })
                                  }
-                               }
-                             end
-                  packages.map{ |p|
-                    SoftwarePackage.load(p, dir, frags)
-                  }
-                end
+                               else
+                                 ps.map{ |k, v|
+                                   {
+                                     'package' => k,
+                                     'specs' => v,
+                                   }
+                                 }
+                               end
+                    packages.map{ |p|
+                      SoftwarePackage.load(p, dir, frags)
+                    }
+                  end
+    end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -2059,9 +2091,13 @@ class SoftwareRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    ret['packages'] = @packages.map{ |p|
-      p.to_h
-    }
+    if @mixin.nil?
+      ret['packages'] = @packages.map{ |p|
+        p.to_h
+      }
+    else
+      ret['$mixin'] = @mixin
+    end
     ret
   end
 end
@@ -2097,12 +2133,12 @@ class SoftwarePackage < CWLObject
 end
 
 class InitialWorkDirRequirement < CWLObject
-  cwl_object_preamble :class_, :listing
+  cwl_object_preamble :class_, :listing, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
       obj.fetch('class', '') == 'InitialWorkDirRequirement' and
-      obj.include? 'listing'
+      (obj.include?('$mixin') or obj.include?('listing'))
   end
 
   def self.load(obj, dir, frags)
@@ -2114,13 +2150,17 @@ class InitialWorkDirRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @listing = if obj['listing'].instance_of? Array
-                 obj['listing'].map{ |lst|
-                   self.class.load_list(lst, dir, frags)
-                 }
-               else
-                 Expression.load(obj['listing'], dir, frags)
-               end
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @listing = if obj['listing'].instance_of? Array
+                   obj['listing'].map{ |lst|
+                     self.class.load_list(lst, dir, frags)
+                   }
+                 else
+                   Expression.load(obj['listing'], dir, frags)
+                 end
+    end
   end
 
   def self.load_list(obj, dir, frags)
@@ -2149,9 +2189,13 @@ class InitialWorkDirRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    ret['listing'] = @listing.map{ |lst|
-      lst.to_h
-    }
+    if @mixin.nil?
+      ret['listing'] = @listing.map{ |lst|
+        lst.to_h
+      }
+    else
+      ret['$mixin'] = @mixin
+    end
     ret
   end
 end
@@ -2196,12 +2240,12 @@ class Dirent < CWLObject
 end
 
 class EnvVarRequirement < CWLObject
-  cwl_object_preamble :class_, :envDef
+  cwl_object_preamble :class_, :envDef, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
       obj.fetch('class', '') == 'EnvVarRequirement' and
-      obj.include? 'envDef'
+      (obj.include?('$mixin') or obj.include?('envDef'))
   end
 
   def self.load(obj, dir, frags)
@@ -2210,29 +2254,36 @@ class EnvVarRequirement < CWLObject
 
   def initialize(obj, dir, frags)
     unless self.class.valid?(obj)
+      p (obj.instance_of?(Hash) and
+         obj.fetch('class', '') == 'EnvVarRequirement' and
+         (obj.include?('$mixin') or obj.include?('envDef')))
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @envDef = if obj['envDef'].instance_of? Array
-                obj['envDef'].map{ |env|
-                  EnvironmentDef.load(env, dir, frags)
-                }
-              else
-                defs = obj['envDef']
-                if defs.values.first.instance_of? String
-                  defs.map{ |k, v|
-                    EnvironmentDef.load({
-                                          'envName' => k,
-                                          'envValue' => v,
-                                        }, dir, frags)
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @envDef = if obj['envDef'].instance_of? Array
+                  obj['envDef'].map{ |env|
+                    EnvironmentDef.load(env, dir, frags)
                   }
                 else
-                  defs.map{ |k, v|
-                    EnvironmentDef.load(v.merge({ 'envName' => k }),
-                                        dir, frags)
-                  }
+                  defs = obj['envDef']
+                  if defs.values.first.instance_of? String
+                    defs.map{ |k, v|
+                      EnvironmentDef.load({
+                                            'envName' => k,
+                                            'envValue' => v,
+                                          }, dir, frags)
+                    }
+                  else
+                    defs.map{ |k, v|
+                      EnvironmentDef.load(v.merge({ 'envName' => k }),
+                                          dir, frags)
+                    }
+                  end
                 end
-              end
+    end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -2246,9 +2297,13 @@ class EnvVarRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    ret['envDef'] = @envDef.map{ |env|
-      env.to_h
-    }
+    if @mixin.nil?
+      ret['envDef'] = @envDef.map{ |env|
+        env.to_h
+      }
+    else
+      ret['$mixin'] = @mixin
+    end
     ret
   end
 end
@@ -2289,7 +2344,7 @@ class EnvironmentDef < CWLObject
 end
 
 class ShellCommandRequirement < CWLObject
-  cwl_object_preamble :class_
+  cwl_object_preamble :class_, :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -2305,6 +2360,9 @@ class ShellCommandRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -2314,13 +2372,15 @@ class ShellCommandRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
+    ret['$mixin'] = @mixin unless @mixin.nil?
     ret
   end
 end
 
 class ResourceRequirement < CWLObject
   cwl_object_preamble :class_, :coresMin, :coresMax, :ramMin, :ramMax,
-                      :tmpdirMin, :tmpdirMax, :outdirMin, :outdirMax
+                      :tmpdirMin, :tmpdirMax, :outdirMin, :outdirMax,
+                      :mixin
 
   def self.satisfies_additional_constraints(obj)
     obj.instance_of?(Hash) and
@@ -2336,62 +2396,66 @@ class ResourceRequirement < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
-    @coresMin = if obj.include? 'coresMin'
-                  if obj['coresMin'].instance_of? String
-                    Expression.load(obj['coresMin'], dir, frags)
+    if obj.include? '$mixin'
+      @mixin = obj['$mixin']
+    else
+      @coresMin = if obj.include? 'coresMin'
+                    if obj['coresMin'].instance_of? String
+                      Expression.load(obj['coresMin'], dir, frags)
+                    else
+                      obj['coresMin']
+                    end
+                  end
+      @coresMax = if obj.include? 'coresMax'
+                    if obj['coresMax'].instance_of? String
+                      Expression.load(obj['coresMax'], dir, frags)
+                    else
+                      obj['coresMax']
+                    end
+                  end
+      @ramMin = if obj.include? 'ramMin'
+                  if obj['ramMin'].instance_of? String
+                    Expression.load(obj['ramMin'], dir, frags)
                   else
-                    obj['coresMin']
+                    obj['ramMin']
                   end
                 end
-    @coresMax = if obj.include? 'coresMax'
-                  if obj['coresMax'].instance_of? String
-                    Expression.load(obj['coresMax'], dir, frags)
+      @ramMax = if obj.include? 'ramMax'
+                  if obj['ramMax'].instance_of? String
+                    Expression.load(obj['ramMax'], dir, frags)
                   else
-                    obj['coresMax']
+                    obj['ramMax']
                   end
                 end
-    @ramMin = if obj.include? 'ramMin'
-                if obj['ramMin'].instance_of? String
-                  Expression.load(obj['ramMin'], dir, frags)
-                else
-                  obj['ramMin']
-                end
-              end
-    @ramMax = if obj.include? 'ramMax'
-                if obj['ramMax'].instance_of? String
-                  Expression.load(obj['ramMax'], dir, frags)
-                else
-                  obj['ramMax']
-                end
-              end
-    @tmpdirMin = if obj.include? 'tmpdirMin'
-                   if obj['tmpdirMin'].instance_of? String
-                     Expression.load(obj['tmpdirMin'], dir, frags)
-                   else
-                     obj['tmpdirMin']
+      @tmpdirMin = if obj.include? 'tmpdirMin'
+                     if obj['tmpdirMin'].instance_of? String
+                       Expression.load(obj['tmpdirMin'], dir, frags)
+                     else
+                       obj['tmpdirMin']
+                     end
                    end
-                 end
-    @tmpdirMax = if obj.include? 'tmpdirMax'
-                   if obj['tmpdirMax'].instance_of? String
-                     Expression.load(obj['tmpdirMax'], dir, frags)
-                   else
-                     obj['tmpdirMax']
+      @tmpdirMax = if obj.include? 'tmpdirMax'
+                     if obj['tmpdirMax'].instance_of? String
+                       Expression.load(obj['tmpdirMax'], dir, frags)
+                     else
+                       obj['tmpdirMax']
+                     end
                    end
-                 end
-    @outdirMin = if obj.include? 'outdirMin'
-                   if obj['outdirMin'].instance_of? String
-                     Expression.load(obj['outdirMin'], dir, frags)
-                   else
-                     obj['outdirMin']
+      @outdirMin = if obj.include? 'outdirMin'
+                     if obj['outdirMin'].instance_of? String
+                       Expression.load(obj['outdirMin'], dir, frags)
+                     else
+                       obj['outdirMin']
+                     end
                    end
-                 end
-    @outdirMax = if obj.include? 'outdirMax'
-                   if obj['outdirMax'].instance_of? String
-                     Expression.load(obj['outdirMax'], dir, frags)
-                   else
-                     obj['outdirMax']
+      @outdirMax = if obj.include? 'outdirMax'
+                     if obj['outdirMax'].instance_of? String
+                       Expression.load(obj['outdirMax'], dir, frags)
+                     else
+                       obj['outdirMax']
+                     end
                    end
-                 end
+    end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -2442,61 +2506,65 @@ class ResourceRequirement < CWLObject
   def to_h
     ret = {}
     ret['class'] = @class_
-    unless @coresMin.nil?
-      ret['coresMin'] = if @coresMin.instance_of? Expression
-                          @coresMin.to_h
-                        else
-                          @coresMin
-                        end
-    end
-    unless @coresMax.nil?
-      ret['coresMax'] = if @coresMax.instance_of? Expression
-                          @coresMax.to_h
-                        else
-                          @coresMax
-                        end
-    end
-    unless @ramMin.nil?
-      ret['ramMin'] = if @ramMin.instance_of? Expression
+    if @mixin.nil?
+      unless @coresMin.nil?
+        ret['coresMin'] = if @coresMin.instance_of? Expression
+                            @coresMin.to_h
+                          else
+                            @coresMin
+                          end
+      end
+      unless @coresMax.nil?
+        ret['coresMax'] = if @coresMax.instance_of? Expression
+                            @coresMax.to_h
+                          else
+                            @coresMax
+                          end
+      end
+      unless @ramMin.nil?
+        ret['ramMin'] = if @ramMin.instance_of? Expression
                           @ramMin.to_h
                         else
                           @ramMin
                         end
-    end
-    unless @ramMax.nil?
-      ret['ramMax'] = if @ramMax.instance_of? Expression
+      end
+      unless @ramMax.nil?
+        ret['ramMax'] = if @ramMax.instance_of? Expression
                           @ramMax.to_h
                         else
                           @ramMax
                         end
-    end
-    unless @tmpdirMin.nil?
-      ret['tmpdirMin'] = if @tmpdirMin.instance_of? Expression
-                          @tmpdirMin.to_h
-                        else
-                          @tmpdirMin
-                        end
-    end
-    unless @tmpdirMax.nil?
-      ret['tmpdirMax'] = if @tmpdirMax.instance_of? Expression
-                          @tmpdirMax.to_h
-                        else
-                          @tmpdirMax
-                        end
-    end
-    unless @outdirMin.nil?
-      ret['outdirMin'] = if @outdirMin.instance_of? Expression
-                          @outdirMin.to_h
-                        else
-                          @outdirMin
-                        end
-    end
-    unless @outdirMax.nil?
-      ret['outdirMax'] = if @outdirMax.instance_of? Expression
-                          @outdirMax.to_h
-                        else
-                          @outdirMax
-                        end
+      end
+      unless @tmpdirMin.nil?
+        ret['tmpdirMin'] = if @tmpdirMin.instance_of? Expression
+                             @tmpdirMin.to_h
+                           else
+                             @tmpdirMin
+                           end
+      end
+      unless @tmpdirMax.nil?
+        ret['tmpdirMax'] = if @tmpdirMax.instance_of? Expression
+                             @tmpdirMax.to_h
+                           else
+                             @tmpdirMax
+                           end
+      end
+      unless @outdirMin.nil?
+        ret['outdirMin'] = if @outdirMin.instance_of? Expression
+                             @outdirMin.to_h
+                           else
+                             @outdirMin
+                           end
+      end
+      unless @outdirMax.nil?
+        ret['outdirMax'] = if @outdirMax.instance_of? Expression
+                             @outdirMax.to_h
+                           else
+                             @outdirMax
+                           end
+      end
+    else
+      ret['$mixin'] = @mixin
     end
     ret
   end
