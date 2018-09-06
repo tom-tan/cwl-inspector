@@ -50,9 +50,10 @@ def traverse(obj, basedir)
     elsif obj.include? '$include'
       include_resource(obj['$include'], basedir)
     elsif obj.include? '$mixin'
-      mixin = obj.dup.delete('$mixin')
+      removed = obj.dup
+      mixin = removed.delete('$mixin')
       o = import_resource(mixin, basedir)
-      o.merge(obj.transform_values{ |v|
+      o.merge(removed.transform_values{ |v|
                 traverse(v, basedir)
               })
     else
