@@ -183,10 +183,9 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
         val = shellQuote ? %!"#{value}"! : value
         tmp = pre ? [pre, val] : [val]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-      when 'File'
+      when 'File', 'Directory'
         tmp = pre ? [pre, %!"#{value.path}"!] : [%!"#{value.path}"!]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-      # when 'Directory'
       else
         raise CWLInspectionError, "Unsupported type: #{type}"
       end
