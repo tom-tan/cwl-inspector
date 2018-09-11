@@ -281,6 +281,11 @@ class CWLObject
     }
   end
 
+  def self.contains_extensions(obj)
+    keys = obj.keys
+    keys.include?('$namespaces') or keys.include?('$schemas')
+  end
+
   def self.satisfies_additional_constraints(obj)
     true
   end
@@ -323,6 +328,10 @@ class CommandLineTool < CWLObject
   end
 
   def initialize(obj, dir, frags)
+    if self.class.contains_extensions(obj)
+      raise CWLParseError, "Currently extensions and metadata are not supported in #{self.class}"
+    end
+
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -2270,9 +2279,6 @@ class EnvVarRequirement < CWLObject
 
   def initialize(obj, dir, frags)
     unless self.class.valid?(obj)
-      p (obj.instance_of?(Hash) and
-         obj.fetch('class', '') == 'EnvVarRequirement' and
-         (obj.include?('$mixin') or obj.include?('envDef')))
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
     @class_ = obj['class']
@@ -2785,6 +2791,9 @@ class Workflow < CWLObject
   end
 
   def initialize(obj, dir, frags)
+    if self.class.contains_extensions(obj)
+      raise CWLParseError, "Currently extensions and metadata are not supported in #{self.class}"
+    end
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
@@ -3666,6 +3675,9 @@ class ExpressionTool < CWLObject
   end
 
   def initialize(obj, dir, frags)
+    if self.class.contains_extensions(obj)
+      raise CWLParseError, "Currently extensions and metadata are not supported in #{self.class}"
+    end
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
