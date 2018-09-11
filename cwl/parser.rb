@@ -210,6 +210,22 @@ class Array
   end
 end
 
+def trim(id)
+  if id.match(%r!^#.+/(.+)$!)
+    $1
+  else
+    id
+  end
+end
+
+def trim_source(id)
+  if id.match(%r!^#[^/]+/(.+)$!)
+    $1
+  else
+    id
+  end
+end
+
 class CommonWorkflowLanguage
   def self.load_file(file, do_preprocess = true)
     obj = if do_preprocess
@@ -528,7 +544,7 @@ class CommandInputParameter < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
@@ -1280,7 +1296,7 @@ class CommandOutputParameter < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |f|
@@ -2965,7 +2981,7 @@ class WorkflowOutputParameter < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
@@ -2985,9 +3001,9 @@ class WorkflowOutputParameter < CWLObject
                 Expression.load(obj['format'], dir, frags)
               end
     @outputSource = if obj.fetch('outputSource', []).instance_of? Array
-                      obj.fetch('outputSource', [])
+                      obj.fetch('outputSource', []).map{ |s| trim_source(s) }
                     else
-                      [obj['outputSource']]
+                      [trim_source(obj['outputSource'])]
                     end
     @linkMerge = if obj.include? 'linkMerge'
                    LinkMergeMethod.load(obj['linkMerge'], dir, frags)
@@ -3251,7 +3267,7 @@ class WorkflowStep < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @in = if obj['in'].instance_of? Array
             obj['in'].map{ |o|
               WorkflowStepInput.load(o, dir, frags)
@@ -3419,11 +3435,11 @@ class WorkflowStepInput < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @source = if obj.fetch('source', []).instance_of? Array
-                obj.fetch('source', [])
+                obj.fetch('source', []).map{ |s| trim_source(s) }
               else
-                [obj['source']]
+                [trim_source(obj['source'])]
               end
     @linkMerge = if obj.include? 'linkMerge'
                    LinkMergeMethod.load(obj['linkMerge'], dir, frags)
@@ -3471,7 +3487,7 @@ class WorkflowStepOutput < CWLObject
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @id = obj['id']
+    @id = trim(obj['id'])
   end
 
   def to_h
@@ -3827,7 +3843,7 @@ class InputParameter < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
@@ -3913,7 +3929,7 @@ class ExpressionToolOutputParameter < CWLObject
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
 
-    @id = obj['id']
+    @id = trim(obj['id'])
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
