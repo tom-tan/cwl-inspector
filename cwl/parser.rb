@@ -41,6 +41,9 @@ end
 class CWLInspectionError < Exception
 end
 
+class UnsupportedError < Exception
+end
+
 def walk(cwl, path, default=nil, exception=false)
   unless path.start_with? '.'
     raise CWLInspectionError, "Invalid path: #{path}"
@@ -329,7 +332,7 @@ class CommandLineTool < CWLObject
 
   def initialize(obj, dir, frags)
     if self.class.contains_extensions(obj)
-      raise CWLParseError, "Currently extensions and metadata are not supported in #{self.class}"
+      raise UnsupportedError, "Extensions and metadata are not yet implemented"
     end
 
     unless self.class.valid?(obj)
@@ -2792,7 +2795,7 @@ class Workflow < CWLObject
 
   def initialize(obj, dir, frags)
     if self.class.contains_extensions(obj)
-      raise CWLParseError, "Currently extensions and metadata are not supported in #{self.class}"
+      raise UnsupportedError, "Extensions and metadata are not yet implemented"
     end
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
@@ -3676,7 +3679,7 @@ class ExpressionTool < CWLObject
 
   def initialize(obj, dir, frags)
     if self.class.contains_extensions(obj)
-      raise CWLParseError, "Currently extensions and metadata are not supported in #{self.class}"
+      raise UnsupportedError, "Extensions and metadata are not yet implemented"
     end
     unless self.class.valid?(obj)
       raise CWLParseError, "Cannot parse as #{self.class}"
