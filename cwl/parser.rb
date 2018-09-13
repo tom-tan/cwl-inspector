@@ -2186,7 +2186,7 @@ class InitialWorkDirRequirement < CWLObject
                      self.class.load_list(lst, dir, frags)
                    }
                  else
-                   Expression.load(obj['listing'], dir, frags)
+                   [Expression.load(obj['listing'], dir, frags)]
                  end
     end
   end
