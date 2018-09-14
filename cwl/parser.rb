@@ -278,7 +278,7 @@ class CWLObject
             end
           }.any?{ |f|
             f.to_s == k
-          }
+          } or k.start_with?('$')
         } and satisfies_additional_constraints(obj)
       end
     }
