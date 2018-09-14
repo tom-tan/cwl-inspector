@@ -127,16 +127,6 @@ def collect_fragments(obj, acc = {})
   acc
 end
 
-def resolve(uri, basedir)
-  case uri
-  when /^(.+)#(.+)$/
-    file, fragment = $1, $2
-    fragments(file, basedir)[fragment]
-  else
-    raise "Unsupported URI: #{uri}"
-  end
-end
-
 if $0 == __FILE__
   return_fragment = false
   opt = OptionParser.new
