@@ -2714,7 +2714,7 @@ class Expression
     fun_parser = ECMAScriptFunctionBodyParser.new
     ref_parser = ParameterReferenceParser.new
 
-    evaled = nil
+    evaled = []
     while expression.match rx
       kind = $1 == '(' ? :expression : :body
       parser = if js_req
@@ -2737,23 +2737,32 @@ class Expression
               else
                 evaluate_parameter_reference(exp, inputs, runtime, self_)
               end
-        evaled = if evaled.nil? and pre.empty?
-                   ret
-                 else
-                   "#{evaled}#{pre}#{ret}"
-                 end
+        if pre.empty?
+          evaled.push ret
+        else
+          evaled.push(pre, ret)
+        end
         expression = post
       rescue Parslet::ParseFailed
         str = js_req ? 'Javascript expression' : 'parameter reference'
         raise CWLInspectionError, "Invalid #{str}: #{expression}"
       end
     end
-    if evaled.nil?
+    if evaled.empty?
       expression
-    elsif expression.empty?
-      evaled
     else
-      "#{evaled}#{expression}"
+      es = if expression.empty?
+             evaled
+           else
+             [*evaled, expression]
+           end
+      if es.length == 1
+        es.first
+      else
+        es.map{ |e|
+          e.nil? ? 'null' : e
+        }.join
+      end
     end
   end
 
