@@ -626,6 +626,9 @@ def list_(cwl, output, runtime, inputs)
                         }, runtime['docdir'].first, {})
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   else
+    if type.instance_of?(CWLType) and type.type == 'null'
+      return nil
+    end
     obj = walk(cwl, ".outputs.#{output.id}")
     type = obj.type
     oBinding = obj.outputBinding
