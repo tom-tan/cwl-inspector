@@ -79,6 +79,18 @@ def docker_command(cwl, runtime, inputs)
       "-v #{runtime['outdir']}:#{workdir}",
       "-v #{runtime['tmpdir']}:/tmp",
     ]
+    replaced_runtime = Hash[
+      runtime.map{ |k, v|
+        case k
+        when 'outdir'
+          [k, workdir]
+        when 'tmpdir'
+          [k, '/tmp']
+        else
+          [k, v]
+        end
+      }
+    ]
 
     replaced_inputs = Hash[
       walk(cwl, '.inputs', []).map{ |v|
@@ -87,9 +99,9 @@ def docker_command(cwl, runtime, inputs)
         [v.id, inp]
       }]
     cmd.push img
-    [cmd, replaced_inputs]
+    [cmd, replaced_inputs, replaced_runtime]
   else
-    [[], inputs]
+    [[], inputs, runtime]
   end
 end
 
@@ -264,7 +276,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   if cwl.instance_of? String
     cwl = CommonWorkflowLanguage.load_file(cwl)
   end
-  container, replaced_inputs = container_command(cwl, runtime, inputs, self_, :docker)
+  container, replaced_inputs, replaced_runtime = container_command(cwl, runtime, inputs, self_, :docker)
   use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
 
   redirect_in = if walk(cwl, '.stdin')
@@ -301,7 +313,7 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
     *walk(cwl, '.baseCommand', []).map{ |cmd|
       %!"#{cmd}"!
     },
-    *construct_args(cwl, runtime, replaced_inputs, self_),
+    *construct_args(cwl, replaced_runtime, replaced_inputs, self_),
   ]
   shell = case RUBY_PLATFORM
           when /darwin|mac os/
@@ -423,7 +435,7 @@ def parse_inputs(cwl, inputs, docdir)
   end
 end
 
-def parse_object(id, type, obj, default, loadContents, docdir)
+def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, outdir = nil)
   if type.nil?
     type = guess_type(obj)
   elsif type.instance_of?(CWLType) and type.type == 'Any'
@@ -470,13 +482,53 @@ def parse_object(id, type, obj, default, loadContents, docdir)
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
-      file = obj.nil? ? default : CWLFile.load(obj, docdir, {})
+      file = if dockerReq
+               vardir = case RUBY_PLATFORM
+                        when /darwin|mac os/
+                          '/private/var'
+                        when /linux/
+                          '/var'
+                        else
+                          raise "Unsupported platform: #{RUBY_PLATFORM}"
+                        end
+               workdir = (dockerReq.dockerOutputDirectory or "#{vardir}/spool/cwl")
+               if obj.nil?
+                 default
+               else
+                 o = obj.dup
+                 o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
+                 o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
+                 CWLFile.load(o, docdir, {})
+               end
+             else
+               obj.nil? ? default : CWLFile.load(obj, docdir, {})
+             end
       file.evaluate(docdir, loadContents)
     when 'Directory'
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
-      dir = obj.nil? ? default : Directory.load(obj, docdir, {})
+      dir = if dockerReq
+               vardir = case RUBY_PLATFORM
+                        when /darwin|mac os/
+                          '/private/var'
+                        when /linux/
+                          '/var'
+                        else
+                          raise "Unsupported platform: #{RUBY_PLATFORM}"
+                        end
+               workdir = (dockerReq.dockerOutputDirectory or "#{vardir}/spool/cwl")
+               if obj.nil?
+                 default
+               else
+                 o = obj.dup
+                 o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
+                 o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
+                 Directory.load(o, docdir, {})
+               end
+             else
+               obj.nil? ? default : Directory.load(obj, docdir, {})
+             end
       dir.evaluate(docdir, nil)
     end
   when CommandInputUnionSchema
@@ -530,7 +582,8 @@ def list(cwl, runtime, inputs)
     }
     Hash[json.each.map{ |k, v|
            [k,
-            parse_object(k, nil, v, nil, false, runtime['docdir'].first).to_h]
+            parse_object(k, nil, v, nil, false, runtime['docdir'].first,
+                         docker_requirement(cwl), dir).to_h]
          }]
   else
     Hash[walk(cwl, '.outputs', []).map { |o|
