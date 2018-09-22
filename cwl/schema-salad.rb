@@ -127,6 +127,10 @@ def collect_fragments(obj, acc = {})
   acc
 end
 
+def namespaces(obj)
+  obj.fetch('$namespaces', {})
+end
+
 if $0 == __FILE__
   return_fragment = false
   opt = OptionParser.new

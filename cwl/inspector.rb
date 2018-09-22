@@ -498,10 +498,10 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
                  o = obj.dup
                  o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
                  o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
-                 CWLFile.load(o, docdir, {})
+                 CWLFile.load(o, docdir, {}, {}) # TODO
                end
              else
-               obj.nil? ? default : CWLFile.load(obj, docdir, {})
+               obj.nil? ? default : CWLFile.load(obj, docdir, {}, {}) # TODO
              end
       file.evaluate(docdir, loadContents)
     when 'Directory'
@@ -524,10 +524,10 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
                  o = obj.dup
                  o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
                  o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
-                 Directory.load(o, docdir, {})
+                 Directory.load(o, docdir, {}, {}) # TODO
                end
              else
-               obj.nil? ? default : Directory.load(obj, docdir, {})
+               obj.nil? ? default : Directory.load(obj, docdir, {}, {}) # TODO
              end
       dir.evaluate(docdir, nil)
     end
@@ -609,7 +609,7 @@ def list_(cwl, output, runtime, inputs)
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
-                        }, runtime['docdir'].first, {})
+                        }, runtime['docdir'].first, {}, {})
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   when Stderr
     fname = walk(cwl, '.stderr')
@@ -623,7 +623,7 @@ def list_(cwl, output, runtime, inputs)
     file = CWLFile.load({
                           'class' => 'File',
                           'location' => 'file://'+location,
-                        }, runtime['docdir'].first, {})
+                        }, runtime['docdir'].first, {}, {})
     File.exist?(location) ? file.evaluate(runtime['docdir'].first, false) : file
   else
     if type.instance_of?(CWLType) and type.type == 'null'
@@ -650,12 +650,12 @@ def list_(cwl, output, runtime, inputs)
           Directory.load({
                            'class' => 'Directory',
                            'location' => 'file://'+path,
-                         }, runtime['docdir'].first, {})
+                         }, runtime['docdir'].first, {}, {}) # TODO
         else
           CWLFile.load({
                          'class' => 'File',
                          'location' => 'file://'+path,
-                       }, runtime['docdir'].first, {})
+                       }, runtime['docdir'].first, {}, {}) # TODO
         end
       }
     }.flatten.map{ |f|
@@ -671,10 +671,20 @@ def list_(cwl, output, runtime, inputs)
     end
     if type.instance_of?(CWLType) and (type.type == 'File' or
                                        type.type == 'Directory')
-      evaled.first
+      ret = evaled.first
+      if type.type == 'File' and not output.format.nil?
+        ret.format = output.format.evaluate(use_js, inputs, runtime)
+      end
+      ret
     elsif type.instance_of?(CommandOutputArraySchema) and
          (type.items == 'File' or type.items == 'Directory')
-      evaled
+      ret = evaled
+      if type.items == 'File' and not output.format.nil?
+        ret.map{ |f|
+          f.format = output.format.evaluate(use_js, inputs, runtime)
+        }
+      end
+      ret
     else
       # TODO
       evaled
@@ -741,7 +751,7 @@ if $0 == __FILE__
   end
 
   cwl = if file == '-'
-          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd)
+          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd, {}) # TODO
         else
           CommonWorkflowLanguage.load_file(file, do_preprocess)
         end
