@@ -922,7 +922,7 @@ class CWLFile < CWLObject
                   f
                 end
               end
-    @contents = nil
+    @contents = obj.fetch('contents', nil)
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -936,35 +936,38 @@ class CWLFile < CWLObject
       if @contents.nil?
         raise CWLInspectionError, "`path`, `location` or `contents` is necessary for File object: #{self}"
       end
-      raise CWLInspectionError, "Currently file literals without `path` or `location` is not supported"
-      # If the location field is not provided, the contents field must be provided. The implementation must assign a unique identifier for the location field.
+    else
+      file.location, file.path = case location
+                                 when %r|^(.+:)//(.+)$|
+                                   scheme, path = $1, $2
+                                   case scheme
+                                   when 'file:'
+                                     [location, path]
+                                   when 'http:', 'https:', 'ftp:'
+                                     raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                                   else
+                                     raise CWLInspectionError, "Unsupported scheme: #{scheme}"
+                                   end
+                                 else
+                                   path = File.expand_path(location, docdir)
+                                   ['file://'+path, path]
+                                 end
+      file.dirname = File.dirname file.path
+      file.nameext = File.extname file.path
+      file.nameroot = File.basename file.path, file.nameext
+      file.format = @format
+      if File.exist? file.path
+        digest = Digest::SHA1.hexdigest(File.open(file.path, 'rb').read)
+        file.checksum = "sha1$#{digest}"
+        file.size = File.size(file.path)
+      end
     end
 
-    file.location, file.path = case location
-                               when %r|^(.+:)//(.+)$|
-                                 scheme, path = $1, $2
-                                 case scheme
-                                 when 'file:'
-                                   [location, path]
-                                 when 'http:', 'https:', 'ftp:'
-                                   raise CWLInspectionError, "Unsupported scheme: #{scheme}"
-                                 else
-                                   raise CWLInspectionError, "Unsupported scheme: #{scheme}"
-                                 end
-                               else
-                                 path = File.expand_path(location, docdir)
-                                 ['file://'+path, path]
-                               end
-    file.basename = File.basename file.path
-    file.dirname = File.dirname file.path
-    file.nameext = File.extname file.path
-    file.nameroot = File.basename file.path, file.nameext
-    file.format = @format
-    if File.exist? file.path
-      digest = Digest::SHA1.hexdigest(File.open(file.path, 'rb').read)
-      file.checksum = "sha1$#{digest}"
-      file.size = File.size(file.path)
-    end
+    file.basename = if file.basename
+                      file.basename
+                    elsif file.path
+                      File.basename(file.path)
+                    end
     file.secondaryFiles = @secondaryFiles.map{ |sf|
       # TODO: eval needs nss!
       sf.evaluate(docdir, loadContents)
