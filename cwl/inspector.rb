@@ -666,9 +666,10 @@ def list_(cwl, output, runtime, inputs)
              else
                files
              end
-    unless obj.secondaryFiles.empty?
-      raise CWLInspectionError, '`secondaryFiles` is not supported'
-    end
+    # TODO
+    # unless obj.secondaryFiles.empty?
+    #   raise CWLInspectionError, '`secondaryFiles` is not supported'
+    # end
     if type.instance_of?(CWLType) and (type.type == 'File' or
                                        type.type == 'Directory')
       ret = evaled.first
@@ -685,6 +686,13 @@ def list_(cwl, output, runtime, inputs)
         }
       end
       ret
+    elsif type.instance_of?(CommandOutputUnionSchema) and
+         type.types.any?{ |t| t.type == 'File' or t.type == 'Directory'}
+      if type.types.include?(CWLType.new('null')) and evaled.empty?
+        CWLType.new('null')
+      else
+        evaled.first
+      end
     else
       # TODO
       evaled
