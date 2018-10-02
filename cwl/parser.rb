@@ -570,10 +570,19 @@ class CommandInputParameter < CWLObject
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
                         obj.fetch('secondaryFiles', []).map{ |sec|
-                          Expression.load(sec, dir, frags, nss)
+                          if sec.include?('$(') or sec.include?('${')
+                            Expression.load(sec, dir, frags, nss)
+                          else
+                            sec
+                          end
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'], dir, frags, nss)]
+                        sec = obj['secondaryFiles']
+                        if sec.include?('$(') or sec.include?('${')
+                          [Expression.load(sec, dir, frags, nss)]
+                        else
+                          [sec]
+                        end
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
@@ -1356,11 +1365,20 @@ class CommandOutputParameter < CWLObject
     @id = trim(obj['id'])
     @label = obj.fetch('label', nil)
     @secondaryFiles = if obj.fetch('secondaryFiles', []).instance_of? Array
-                        obj.fetch('secondaryFiles', []).map{ |f|
-                          Expression.load(f, dir, frags, nss)
+                        obj.fetch('secondaryFiles', []).map{ |sec|
+                          if sec.include?('$(') or sec.include?('${')
+                            Expression.load(sec, dir, frags, nss)
+                          else
+                            sec
+                          end
                         }
                       else
-                        [Expression.load(obj['secondaryFiles'], dir, frags, nss)]
+                        sec = obj['secondaryFiles']
+                        if sec.include?('$(') or sec.include?('${')
+                          [Expression.load(sec, dir, frags, nss)]
+                        else
+                          [sec]
+                        end
                       end
     @streamable = obj.fetch('streamable', false)
     @doc = if obj.include? 'doc'
