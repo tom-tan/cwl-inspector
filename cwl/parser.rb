@@ -903,7 +903,7 @@ class CWLFile < CWLObject
     @class_ = obj['class']
     @location = obj.fetch('location', nil)
     @path = obj.fetch('path', nil)
-    @basename = nil
+    @basename = obj.fetch('basename', nil)
     @dirname = nil
     @nameroot = nil
     @nameext = nil
@@ -1033,7 +1033,7 @@ class Directory < CWLObject
     @class_ = obj['class']
     @location = obj.fetch('location', nil)
     @path = obj.fetch('path', nil)
-    @basename = nil
+    @basename = obj.fetch('basename', nil)
     @listing = obj.fetch('listing', []).map{ |f|
       case f.fetch('class', '')
       when 'File'
@@ -1077,7 +1077,11 @@ class Directory < CWLObject
                                  path = File.expand_path(location, docdir)
                                  ['file://'+path, path]
                                end
-      dir.basename = File.basename dir.path
+      dir.basename = if dir.basename
+                       dir.basename
+                     elsif dir.path
+                       File.basename dir.path
+                     end
       if Dir.exist? dir.path
         dir.listing = Dir.entries(dir.path).reject{ |lst| lst.match(/^\.+$/) }.map{ |lst|
           path = File.expand_path(lst, dir.path)
