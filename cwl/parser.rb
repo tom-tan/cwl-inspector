@@ -2723,6 +2723,10 @@ def node_bin
   node
 end
 
+def escape(exp)
+  exp.gsub(/\\/) { '\\\\' }.gsub(/"/, '\"').gsub(/\n/, '\n')
+end
+
 def evaluate_js_expression(js_req, expression, kind, inputs, runtime, self_)
   invalids = inputs.select{ |k, v|
     v.instance_of? InvalidVariable
@@ -2731,20 +2735,21 @@ def evaluate_js_expression(js_req, expression, kind, inputs, runtime, self_)
     raise CWLInspectionError, "Invalid input parameter: #{invalids.keys.join(', ')}"
   end
   node = node_bin
-  exp = if kind == :expression
-          "(#{expression.gsub(/\\/){ '\\\\' }})"
-        else
-          "(function() { #{expression.gsub(/\\/){ '\\\\' }.gsub(/\n/, '\n')} })()"
-        end
-  exp = exp.gsub(/"/, '\"')
-  libstr = js_req.expressionLib ? js_req.expressionLib.join(";\n") : ''
+  exps = js_req.expressionLib ? js_req.expressionLib : []
+  e = if kind == :expression
+        "(#{expression})"
+      else
+        "(function() { #{expression} })()"
+      end
+  exps.push e
+  exp = escape(exps.join(";\n"))
   replaced_inputs = Hash[inputs.map{ |k, v|
                            [k, v.to_h]
                          }]
   cmdstr = <<-EOS
   'use strict'
   try{
-    const exp = "#{libstr}\\n#{exp}";
+    const exp = "#{exp}";
     process.stdout.write(JSON.stringify(require('vm').runInNewContext(exp, {
       'runtime': #{JSON.dump(runtime.reject{ |k, _| k == 'docdir' })},
       'inputs': #{JSON.dump(replaced_inputs)},
