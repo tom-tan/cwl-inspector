@@ -2769,6 +2769,8 @@ EOS
 end
 
 class Expression
+  attr_reader :expression
+
   def self.load(obj, dir, frags, nss)
     Expression.new(obj)
   end
