@@ -192,7 +192,7 @@ def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
         tmp = pre ? [pre, value] : [value]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       when 'string'
-        val = shellQuote ? %!"#{value}"! : value
+        val = shellQuote ? %!"#{value.gsub(/"/, '\\"')}"! : value
         tmp = pre ? [pre, val] : [val]
         walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
       when 'File', 'Directory'
