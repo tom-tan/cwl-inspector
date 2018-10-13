@@ -2841,7 +2841,7 @@ class Expression
              [*evaled, expression]
            end
       if es.length == 1
-        es.first
+        InputParameter.parse_object(nil, es.first, runtime['docdir'].first, {}, {})
       else
         es.map{ |e|
           e.nil? ? 'null' : e
@@ -4109,6 +4109,11 @@ class InputParameter
       type = guess_type(obj)
     end
 
+    case obj
+    when CWLFile, Directory
+      return obj
+    end
+
     case type
     when CWLType
       case type.type
@@ -4253,6 +4258,10 @@ def guess_type(value)
                                    'type' => 'array',
                                    'items' => guess_type(value.first).to_h,
                                  }, nil, {}, {})
+  when CWLFile
+    CWLType.load('File', nil, {}, {})
+  when Directory
+    CWLType.load('Directory', nil, {}, {})
   else
     raise CWLInspectionError, "Unsupported value: #{value}"
   end

@@ -666,15 +666,63 @@ def list_(cwl, output, runtime, inputs)
              else
                files
              end
-    # TODO
-    # unless obj.secondaryFiles.empty?
-    #   raise CWLInspectionError, '`secondaryFiles` is not supported'
-    # end
+
     if type.instance_of?(CWLType) and (type.type == 'File' or
                                        type.type == 'Directory')
       ret = evaled.first
-      if type.type == 'File' and not output.format.nil?
-        ret.format = output.format.evaluate(use_js, inputs, runtime)
+      if type.type == 'File'
+        if output.format
+          ret.format = output.format.evaluate(use_js, inputs, runtime)
+        end
+        unless obj.secondaryFiles.empty?
+          ret.secondaryFiles = obj.secondaryFiles.map{ |sec|
+            case sec
+            when String
+              glob = if sec.match(/^(\^+)(.+)$/)
+                       num, ext = $1.length, $2
+                       r = ret
+                       num.times{ r = File.basename(r, '.*') }
+                       r+ext
+                     else
+                       sec
+                     end
+              Dir.glob("*#{glob}", base: runtime['outdir']).map{ |f|
+                path = File.expand_path(f, dir)
+                if File.directory? path
+                  Directory.load({
+                                   'class' => 'Directory',
+                                   'location' => 'file://'+path,
+                                 }, runtime['docdir'].first, {}, {})
+                else
+                  CWLFile.load({
+                                 'class' => 'File',
+                                 'location' => 'file://'+path,
+                               }, runtime['docdir'].first, {}, {})
+                end
+              }
+            when Expression
+              e = sec.evaluate(use_js, inputs, runtime, ret)
+              case e
+              when String
+                [CWLFile.load({
+                                'class' => 'File',
+                                'path' => e,
+                              }, ret.dirname, {}, {})]
+              when Hash # TO BE FIXED
+                case e['class']
+                when 'File'
+                  [CWLFile.load(e, ret.dirname, {}, {})]
+                when 'Directory'
+                  [Directory.load(e, ret.dirname, {}, {})]
+                else
+                  raise CWLInspectionError, "Unknow secondary File type: #{e['class']}"
+                end
+              else
+                raise CWLInspectionError, "Unknow secondary File type: #{e.class}"
+              end
+            end
+          }.flatten
+        end
       end
       ret
     elsif type.instance_of?(CommandOutputArraySchema) and
@@ -783,7 +831,7 @@ if $0 == __FILE__
             commandline(cwl, runtime, inputs)
           when 'ExpressionTool'
             obj = cwl.expression.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                                          inputs, runtime)
+                                          inputs, runtime).to_h
             "echo '#{JSON.dump(obj).gsub("'"){ "\\'" }}' > #{File.join(runtime['outdir'], 'cwl.output.json')}"
           else
             raise CWLInspectionError, "`commandline` does not support #{walk(cwl, '.class')} class"
