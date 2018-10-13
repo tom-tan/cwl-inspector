@@ -680,7 +680,7 @@ def list_(cwl, output, runtime, inputs)
             when String
               glob = if sec.match(/^(\^+)(.+)$/)
                        num, ext = $1.length, $2
-                       r = ret
+                       r = ret.basename
                        num.times{ r = File.basename(r, '.*') }
                        r+ext
                      else
@@ -704,19 +704,12 @@ def list_(cwl, output, runtime, inputs)
               e = sec.evaluate(use_js, inputs, runtime, ret)
               case e
               when String
-                [CWLFile.load({
-                                'class' => 'File',
-                                'path' => e,
-                              }, ret.dirname, {}, {})]
-              when Hash # TO BE FIXED
-                case e['class']
-                when 'File'
-                  [CWLFile.load(e, ret.dirname, {}, {})]
-                when 'Directory'
-                  [Directory.load(e, ret.dirname, {}, {})]
-                else
-                  raise CWLInspectionError, "Unknow secondary File type: #{e['class']}"
-                end
+                CWLFile.load({
+                               'class' => 'File',
+                               'path' => e,
+                             }, ret.dirname, {}, {})
+              when CWLFile, Directory
+                e
               else
                 raise CWLInspectionError, "Unknow secondary File type: #{e.class}"
               end
