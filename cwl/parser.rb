@@ -4240,7 +4240,7 @@ def guess_type(value)
     case value.fetch('class', nil)
     when 'File'
       CWLType.load('File', nil, {}, {})
-    when 'Direcotry'
+    when 'Directory'
       CWLType.load('Directory', nil, {}, {})
     else
       CommandInputRecordSchema.load({
