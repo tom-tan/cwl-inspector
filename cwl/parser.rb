@@ -31,7 +31,6 @@ require 'securerandom'
 require 'tmpdir'
 require 'tempfile'
 require 'digest/sha1'
-require_relative 'js-parser'
 require_relative 'schema-salad'
 
 class CWLParseError < Exception
@@ -2782,19 +2781,55 @@ def parse_parameter_reference(str)
 end
 
 def parse_js_expression(str)
-  m = ECMAScriptExpressionParser.new.parse str
-  exp = m[:body].to_s
-  pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
-  post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
-  [pre, exp, post]
-end
-
-def parse_js_funbody(str)
-  m = ECMAScriptFunctionBodyParser.new.parse str
-  exp = m[:body].to_s
-  pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
-  post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
-  [pre, exp, post]
+  unless str.match(/\$([({])/)
+    return str
+  end
+  pre, paren, rest = $~.pre_match, $1, $~.post_match
+  stack = [paren]
+  exp = ''
+  while rest.match(/["'(){}]/)
+    pr, v, rst = $~.pre_match, $&, $~.post_match
+    exp = exp+pr
+    case v
+    when '"'
+      m = (v+rst).match(/"([^"]|\\")*[^\\]?+"/)
+      unless m
+        raise CWLInspectionError, "Syntax error: #{str}"
+      end
+      rest = m.post_match
+      exp = exp+m[0]
+    when "'"
+      m = (v+rst).match(/'([^']|\\')*[^\\]?+'/)
+      unless m
+        raise CWLInspectionError, "Syntax error: #{str}"
+      end
+      rest = m.post_match
+      exp = exp+m[0]
+    when '(', '{'
+      stack.push v
+      rest = rst
+      exp = exp+v
+    when ')'
+      unless stack.pop == '('
+        raise CWLInspectionError, "Syntax error: #{str}"
+      end
+      rest = rst
+      if stack.empty?
+        break
+      end
+      exp = exp+v
+    when '}'
+      unless stack.pop == '{'
+        raise CWLInspectionError, "Syntax error: #{str}"
+      end
+      rest = rst
+      if stack.empty?
+        break
+      end
+      exp = exp+v
+    end
+  end
+  [pre, exp, rest]
 end
 
 class Expression
@@ -2829,12 +2864,7 @@ class Expression
     while expression.match rx
       kind = $1 == '(' ? :expression : :body
       parser = if js_req
-                 case kind
-                 when :expression
-                   lambda{ |e| parse_js_expression(e) }
-                 when :body
-                   lambda{ |e| parse_js_funbody(e) }
-                 end
+                 lambda{ |e| parse_js_expression(e) }
                else
                  lambda{ |e| parse_parameter_reference(e) }
                end
@@ -2852,7 +2882,7 @@ class Expression
           evaled.push(pre, ret)
         end
         expression = post
-      rescue Parslet::ParseFailed
+      rescue CWLInspectionError
         str = js_req ? 'Javascript expression' : 'parameter reference'
         raise CWLInspectionError, "Invalid #{str}: #{expression}"
       end
