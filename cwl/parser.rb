@@ -2791,7 +2791,7 @@ class Expression
     unless inputs.values.find_index{ |v| v.instance_of? UninstantiatedVariable }.nil?
       return "evaled(#{@expression})"
     end
-    expression = @expression.chomp
+    expression = @expression
 
     rx = js_req ? /\$([({])/ : /\$\(/
     exp_parser = ECMAScriptExpressionParser.new
@@ -2799,6 +2799,7 @@ class Expression
     ref_parser = ParameterReferenceParser.new
 
     evaled = []
+    only_exp = true
     while expression.match rx
       kind = $1 == '(' ? :expression : :body
       parser = if js_req
@@ -2824,6 +2825,7 @@ class Expression
         if pre.empty?
           evaled.push ret
         else
+          only_exp = false
           evaled.push(pre, ret)
         end
         expression = post
@@ -2835,7 +2837,8 @@ class Expression
     if evaled.empty?
       expression
     else
-      es = if expression.empty?
+      es = if expression.empty? or
+             (only_exp and expression.end_with?("\n"))
              evaled
            else
              [*evaled, expression]
