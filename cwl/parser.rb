@@ -31,7 +31,6 @@ require 'securerandom'
 require 'tmpdir'
 require 'tempfile'
 require 'digest/sha1'
-require_relative 'exp-parser'
 require_relative 'js-parser'
 require_relative 'schema-salad'
 
@@ -2768,6 +2767,36 @@ EOS
   ret
 end
 
+def parse_parameter_reference(str)
+  symbol = /\w+/
+  singleq = /\['([^']|\\')*'\]/
+  doubleq = /\["([^"]|\\")*"\]/
+  index = /\[\d+\]/
+  segment = /\.#{symbol}|#{singleq}|#{doubleq}|#{index}/
+  parameter_reference = /\$\((#{symbol}#{segment}*)\)/
+  if str.match(parameter_reference)
+    [$~.pre_match, $1, $~.post_match]
+  else
+    [str, '', '']
+  end
+end
+
+def parse_js_expression(str)
+  m = ECMAScriptExpressionParser.new.parse str
+  exp = m[:body].to_s
+  pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
+  post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
+  [pre, exp, post]
+end
+
+def parse_js_funbody(str)
+  m = ECMAScriptFunctionBodyParser.new.parse str
+  exp = m[:body].to_s
+  pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
+  post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
+  [pre, exp, post]
+end
+
 class Expression
   attr_reader :expression
 
@@ -2794,9 +2823,6 @@ class Expression
     expression = @expression
 
     rx = js_req ? /\$([({])/ : /\$\(/
-    exp_parser = ECMAScriptExpressionParser.new
-    fun_parser = ECMAScriptFunctionBodyParser.new
-    ref_parser = ParameterReferenceParser.new
 
     evaled = []
     only_exp = true
@@ -2805,18 +2831,15 @@ class Expression
       parser = if js_req
                  case kind
                  when :expression
-                   exp_parser
+                   lambda{ |e| parse_js_expression(e) }
                  when :body
-                   fun_parser
+                   lambda{ |e| parse_js_funbody(e) }
                  end
                else
-                 ref_parser
+                 lambda{ |e| parse_parameter_reference(e) }
                end
       begin
-        m = parser.parse expression
-        exp = m[:body].to_s
-        pre = m[:pre].instance_of?(Array) ? '' : m[:pre].to_s
-        post = m[:post].instance_of?(Array) ? '' : m[:post].to_s
+        pre, exp, post = parser.call(expression)
         ret = if js_req
                 evaluate_js_expression(js_req, exp, kind, inputs, runtime, self_)
               else
