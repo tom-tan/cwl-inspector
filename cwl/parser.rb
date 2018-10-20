@@ -1051,11 +1051,6 @@ class Directory < CWLObject
   def evaluate(docdir, loadContents = false)
     dir = self.dup
     location = @location.nil? ? @path : @location
-    if @location.nil?
-      if @listing.empty?
-        raise CWLInspectionError, "`path`, `location` or `listing` fields is necessary for Directory object: #{self}"
-      end
-    end
 
     if location
       dir.location, dir.path = if location.match %r|^(.+:)//(.+)$|
