@@ -2787,14 +2787,14 @@ def parse_js_expression(str)
     exp = exp+pr
     case v
     when '"'
-      m = (v+rst).match(/"([^"]|\\")*[^\\]?+"/)
+      m = (v+rst).match(/"("|([^"]|\\")*[^\\]?+")/)
       unless m
         raise CWLInspectionError, "Syntax error: #{str}"
       end
       rest = m.post_match
       exp = exp+m[0]
     when "'"
-      m = (v+rst).match(/'([^']|\\')*[^\\]?+'/)
+      m = (v+rst).match(/'('|([^']|\\')*[^\\]?+')/)
       unless m
         raise CWLInspectionError, "Syntax error: #{str}"
       end
