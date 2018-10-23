@@ -4305,9 +4305,17 @@ def guess_type(value)
                                     }, nil, {}, {})
     end
   when Array
+    types = value.map{ |v|
+      guess_type(v).to_h
+    }.uniq
+    type = if types.length == 1
+             types.first
+           else
+             types
+           end
     CommandInputArraySchema.load({
                                    'type' => 'array',
-                                   'items' => guess_type(value.first).to_h,
+                                   'items' => type
                                  }, nil, {}, {})
   when CWLFile
     CWLType.load('File', nil, {}, {})
