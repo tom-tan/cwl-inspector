@@ -495,13 +495,23 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
                if obj.nil?
                  default
                else
+                 unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'File'
+                   raise CWLInspectionError, "Invalid file object: #{obj}"
+                 end
                  o = obj.dup
                  o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
                  o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
-                 CWLFile.load(o, docdir, {}, {}) # TODO
+                 CWLFile.load(o, docdir, {}, {})
                end
              else
-               obj.nil? ? default : CWLFile.load(obj, docdir, {}, {}) # TODO
+               if obj.nil?
+                 default
+               else
+                 unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'File'
+                   raise CWLInspectionError, "Invalid file object: #{obj}"
+                 end
+                 CWLFile.load(obj, docdir, {}, {})
+               end
              end
       file.evaluate(docdir, loadContents)
     when 'Directory'
@@ -521,13 +531,23 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
                if obj.nil?
                  default
                else
+                 unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
+                   raise CWLInspectionError, "Invalid Directory object: #{obj}"
+                 end
                  o = obj.dup
                  o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
                  o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
-                 Directory.load(o, docdir, {}, {}) # TODO
+                 Directory.load(o, docdir, {}, {})
                end
              else
-               obj.nil? ? default : Directory.load(obj, docdir, {}, {}) # TODO
+               if obj.nil?
+                 default
+               else
+                 unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
+                   raise CWLInspectionError, "Invalid Directory object: #{obj}"
+                 end
+                 Directory.load(obj, docdir, {}, {})
+               end
              end
       dir.evaluate(docdir, nil)
     end
