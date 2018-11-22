@@ -105,14 +105,14 @@ def collect_fragments(obj, acc = {})
       collect_fragments(o, acc)
     }
   when Hash
-    if obj.include?('name')
+    if obj.include?('name') and obj['name'].instance_of?(String)
       frag = if obj['name'].start_with? '#'
                obj['name'][1..-1]
              else
                obj['name']
              end
       acc[frag] = obj
-    elsif obj.include?('id')
+    elsif obj.include?('id') and obj['id'].instance_of?(String)
       frag = if obj['id'].start_with? '#'
                obj['id'][1..-1]
              else
