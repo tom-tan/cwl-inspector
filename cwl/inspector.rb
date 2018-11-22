@@ -234,9 +234,9 @@ def construct_args(cwl, runtime, inputs, self_)
   }+walk(cwl, '.inputs', []).find_all{ |input|
     type = walk(input, '.type', nil)
     walk(input, '.inputBinding', nil) or
-      type.instance_of?(CommandInputRecordSchema) or
-      type.instance_of?(CommandInputEnumSchema) or
-      type.instance_of?(CommandInputArraySchema)
+      type.instance_of?(CommandInputRecordSchema) or # and not inputBindings.nil?
+      (type.instance_of?(CommandInputEnumSchema) and not type.inputBinding.nil?) or
+      (type.instance_of?(CommandInputArraySchema) and not type.inputBinding.nil?)
   }.find_all{ |input|
     not inputs[input.id].nil?
   }.map{ |input|
