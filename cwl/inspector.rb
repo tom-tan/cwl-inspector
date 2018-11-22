@@ -531,7 +531,7 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
              end
       dir.evaluate(docdir, nil)
     end
-  when CommandInputUnionSchema
+  when CommandInputUnionSchema, InputUnionSchema
     idx = type.types.find_index{ |t|
       begin
         parse_object(id, t, obj, default, loadContents, docdir)
