@@ -3242,7 +3242,7 @@ class OutputRecordSchema < CWLObject
 
   def initialize(obj, dir, frags, nss)
     unless self.class.valid?(obj, nss)
-      raise CWLParseError, "Cannot parse as #{self.class}"
+      raise CWLParseError, "Cannot parse as #{self.class}: #{obj}"
     end
     @type = obj['type']
     @fields = if obj.fetch('fields', []).instance_of? Array
@@ -4196,8 +4196,14 @@ class InputParameter
         end
         obj
       when 'File'
+        unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'File'
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
         CWLFile.load(obj, dir, frags, nss)
       when 'Directory'
+        unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
+          raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
+        end
         Directory.load(obj, dir, frags, nss)
       end
     when CommandInputRecordSchema, InputRecordSchema
