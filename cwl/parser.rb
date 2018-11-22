@@ -238,8 +238,10 @@ class CommonWorkflowLanguage
     nss = namespaces(obj)
     obj = if file.match(/^.+#(.+)$/)
             frags[$1]
-          else
+          elsif obj.include?('class')
             obj
+          else # implicit main
+            frags['main']
           end
     self.load(obj, File.dirname(File.expand_path(file)), frags, nss)
   end
