@@ -659,28 +659,26 @@ def list_(cwl, output, runtime, inputs)
     dir = runtime['outdir']
     files = oBinding.glob.map{ |g|
       pats = g.evaluate(use_js, inputs, runtime, nil)
-      pats = if pats.instance_of? Array
-               pats.join "\0"
-             else
-               pats
-             end
-      Dir.glob(pats, base: dir).map{ |f|
-        path = File.expand_path(f, dir)
-        if File.directory? path
-          Directory.load({
-                           'class' => 'Directory',
+      pats = pats.instance_of?(Array) ? pats : [pats]
+      pats.map{ |p|
+        Dir.glob(p, base: dir).map{ |f|
+          path = File.expand_path(f, dir)
+          if File.directory? path
+            Directory.load({
+                             'class' => 'Directory',
+                             'location' => 'file://'+path,
+                           }, runtime['docdir'].first, {}, {}) # TODO
+          else
+            CWLFile.load({
+                           'class' => 'File',
                            'location' => 'file://'+path,
                          }, runtime['docdir'].first, {}, {}) # TODO
-        else
-          CWLFile.load({
-                         'class' => 'File',
-                         'location' => 'file://'+path,
-                       }, runtime['docdir'].first, {}, {}) # TODO
-        end
+          end
+        }.map{ |f|
+          f.evaluate(runtime['docdir'].first, loadContents)
+        }.sort_by{ |f| f.basename }
       }
-    }.flatten.map{ |f|
-      f.evaluate(runtime['docdir'].first, loadContents)
-    }.sort_by{ |f| f.basename }
+    }.flatten
     evaled = if oBinding.outputEval
                oBinding.outputEval.evaluate(use_js, inputs, runtime, files)
              else
