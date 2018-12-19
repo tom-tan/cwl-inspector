@@ -1191,7 +1191,9 @@ class CommandInputRecordSchema < CWLObject
                 }
               end
     @label = obj.fetch('label', nil)
-    @name = obj.fetch('name', nil)
+    @name = if obj.include?('name')
+              trim(obj['name'])
+            end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -1233,7 +1235,7 @@ class CommandInputRecordField < CWLObject
     unless self.class.valid?(obj, nss)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @name = obj['name']
+    @name = trim(obj['name'])
     @type = CWLCommandInputType.load(obj['type'], dir, frags, nss)
     @doc = obj.fetch('doc', nil)
     @inputBinding = if obj.include? 'inputBinding'
@@ -1605,7 +1607,9 @@ class CommandOutputRecordSchema < CWLObject
                 }
               end
     @label = obj.fetch('label', nil)
-    @name = obj.fetch('name', nil)
+    @name = if obj.include?('name')
+              trim(obj['name'])
+            end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -1647,7 +1651,7 @@ class CommandOutputRecordField < CWLObject
     unless self.class.valid?(obj, nss)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @name = obj['name']
+    @name = trim(obj['name'])
     @type = CWLCommandOutputType.load(obj['type'], dir, frags, nss)
     @doc = obj.fetch('doc', nil)
     @outputBinding = if obj.include? 'outputBinding'
@@ -1935,7 +1939,9 @@ class InputRecordSchema < CWLObject
                 }
               end
     @label = obj.fetch('label', nil)
-    @name = obj.fetch('name', nil)
+    @name = if obj.include?('name')
+              trim(obj['name'])
+            end
   end
 
   def evaluate(js_req, inputs, runtime, self_ = nil)
@@ -1977,7 +1983,7 @@ class InputRecordField < CWLObject
     unless self.class.valid?(obj, nss)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @name = obj['name']
+    @name = trim(obj['name'])
     @type = CWLInputType.load(obj['type'], dir, frags, nss)
     @doc = obj.fetch('doc', nil)
     @inputBinding = if obj.include? 'inputBinding'
@@ -3305,7 +3311,7 @@ class OutputRecordField < CWLObject
     unless self.class.valid?(obj, nss)
       raise CWLParseError, "Cannot parse as #{self.class}"
     end
-    @name = obj['name']
+    @name = trim(obj['name'])
     @type = CWLOutputType.load(obj['type'], dir, frags, nss)
     @doc = obj.fetch('doc', nil)
     @outputBinding = if obj.include? 'outputBinding'
