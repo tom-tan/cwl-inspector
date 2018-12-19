@@ -324,16 +324,24 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
           else
             raise "Unsupported platform: #{RUBY_PLATFORM}"
           end
-  cmd = [
-    docker_requirement(cwl).nil? ? 'cd ~' : nil,
-    command.join(' ').gsub(/'/) { "'\\''" },
-  ].compact.join(' && ')
 
+  cmd = if get_requirement(cwl, 'ShellCommandRequirement', false) or
+          docker_requirement(cwl).nil?
+          [shell, '-c',
+           "'" + [
+             docker_requirement(cwl).nil? ? 'cd ~' : nil,
+             command.join(' ').gsub(/'/) { "'\\''" }
+           ].compact.join(' && ') + "'" ]
+        else
+          [
+            docker_requirement(cwl).nil? ? 'cd ~' : nil,
+            command.join(' '),
+          ].compact.join(' && ')
+        end
   [
     *container,
     *envArgs,
-    shell, '-c',
-    "'#{cmd}'",
+    cmd,
     *redirect_in,
     *redirect_out,
     *redirect_err,
