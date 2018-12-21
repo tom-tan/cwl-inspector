@@ -29,7 +29,7 @@ class TestWorkflow < Test::Unit::TestCase
 
   def test_arguments
     cwlfile = File.join(@cwldir, 'arguments.cwl')
-    assert_equal("docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}/tmp:#{@vardir}/spool/cwl -v /tmp:/tmp -v #{File.expand_path @cwldir}/Foo.java:#{@vardir}/lib/cwl/inputs/Foo.java:ro java:7-jdk /bin/sh -c '\"javac\" \"-d\" \"#{@vardir}/spool/cwl\" \"#{@vardir}/lib/cwl/inputs/Foo.java\"'",
+    assert_equal("docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}/tmp:#{@vardir}/spool/cwl -v /tmp:/tmp -v #{File.expand_path @cwldir}/Foo.java:#{@vardir}/lib/cwl/inputs/Foo.java:ro java:7-jdk \"javac\" \"-d\" \"#{@vardir}/spool/cwl\" \"#{@vardir}/lib/cwl/inputs/Foo.java\"",
                  commandline(cwlfile,
                              @runtime,
                              parse_inputs(cwlfile,

@@ -13,7 +13,7 @@ class TestExpression < Test::Unit::TestCase
     @cwl = File.join(CWL_PATH, 'expression', 'expression.cwl')
     @runtime = {
       'outdir' => File.absolute_path('.'),
-      'docdir' => '.',
+      'docdir' => ['.'],
       'tmpdir' => '/tmp',
     }
     @sh = case RUBY_PLATFORM
