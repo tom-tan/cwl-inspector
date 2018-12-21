@@ -4258,6 +4258,14 @@ class CWLUnionValue
     @value = value
   end
 
+  def walk(path)
+    if path.empty?
+      @value
+    else
+      @value.walk(path[1..-1])
+    end
+  end
+
   def to_h
     @value.to_h
   end
