@@ -137,115 +137,116 @@ def dockerized(input, type, vardir)
     end
     ret = input.map{ |inp|
       dockerized(inp, type.items, vardir)
-    }.transpose
-    ret.map{ |r| r.flatten }
+    }.transpose.map{ |r| r.flatten }
+    ret.empty? ? [ret, []] : ret
   else
-    input
-  end
-end
-
-def evaluate_input_binding(cwl, type, binding_, runtime, inputs, self_)
-  if type.instance_of? CommandInputUnionSchema
-    return evaluate_input_binding(cwl, self_.type, binding_, runtime, inputs, self_.value)
-  elsif type.instance_of?(CWLType) and type.type == 'null'
-    return
-  end
-  valueFrom = walk(binding_, '.valueFrom')
-  value = nil
-  if self_.instance_of? UninstantiatedVariable
-    value = valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
-  elsif valueFrom
-    value = valueFrom.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
-                               inputs, runtime, self_)
-    type = guess_type(value)
-  else
-    value = self_
-  end
-
-  shellQuote = if get_requirement(cwl, 'ShellCommandRequirement')
-                 walk(binding_, '.shellQuote', true)
-               else
-                 true
-               end
-
-  pre = walk(binding_, '.prefix')
-  if value.instance_of? UninstantiatedVariable
-    name = shellQuote ? %!"#{self_.name}"! : self_.name
-    tmp = pre ? [pre, name] : [name]
-    walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-  else
-    type = if type.nil? or (type.instance_of?(CWLType) and type.type == 'Any')
-             guess_type(value)
-           else
-             type
-           end
-    case type
-    when CWLType
-      case type.type
-      when 'null'
-        raise CWLInspectionError, "Internal error: this statement should not be executed"
-      when 'boolean'
-        if value
-          pre
-        end
-      when 'int', 'long', 'float', 'double'
-        tmp = pre ? [pre, value] : [value]
-        walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-      when 'string'
-        val = shellQuote ? %!"#{value.gsub(/"/, '\\"')}"! : value
-        tmp = pre ? [pre, val] : [val]
-        walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-      when 'File', 'Directory'
-        tmp = pre ? [pre, %!"#{value.path}"!] : [%!"#{value.path}"!]
-        walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-      else
-        raise CWLInspectionError, "Unsupported type: #{type}"
-      end
-    when CommandInputRecordSchema
-      raise CWLInspectionError, "Unsupported record type: #{type}"
-    when CommandInputEnumSchema
-      tmp = pre ? [pre, value] : [value]
-      arg1 = walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
-      arg2 = evaluate_input_binding(cwl, nil, type.inputBinding, runtime, inputs, value)
-      [arg1, arg2].join(' ')
-    when CommandInputArraySchema
-      isep = walk(binding_, '.itemSeparator', nil)
-      sep = isep.nil? ? true : walk(binding_, '.separate', true)
-      isep = (isep or ' ')
-
-      vals = value.map{ |v|
-        evaluate_input_binding(cwl, type.items, type.inputBinding,
-                               runtime, inputs, v)
-      }
-      tmp = pre ? [pre, vals.join(isep)] : [vals.join(isep)]
-      sep ? tmp.join(' ') : tmp.join
-    when CommandInputUnionSchema
-      raise CWLInspectionError, "Internal error: this statement should not be executed"
-    else
-      raise CWLInspectionError, "Unsupported type: #{type}"
-    end
+    [input, []]
   end
 end
 
 def construct_args(cwl, runtime, inputs, self_)
-  arr = walk(cwl, '.arguments', []).to_enum.with_index.map{ |body, idx|
-    i = walk(body, '.position', 0)
-    [[i, idx], evaluate_input_binding(cwl, nil, body, runtime, inputs, nil)]
-  }+walk(cwl, '.inputs', []).find_all{ |input|
-    type = walk(input, '.type', nil)
-    walk(input, '.inputBinding', nil) or
-      type.instance_of?(CommandInputRecordSchema) or # and not inputBindings.nil?
-      (type.instance_of?(CommandInputEnumSchema) and not type.inputBinding.nil?) or
-      (type.instance_of?(CommandInputArraySchema) and not type.inputBinding.nil?)
-  }.find_all{ |input|
-    not inputs[input.id].nil?
-  }.map{ |input|
-    i = walk(input, '.inputBinding.position', 0)
-    [[i, input.id], evaluate_input_binding(cwl, input.type, input.inputBinding, runtime, inputs, inputs[input.id])]
+  # 4.1 (1)
+  arguments = walk(cwl, '.arguments', []).to_enum.with_index.map{ |body_, idx|
+    i = walk(body_, '.position', 0)
+    body = if body_.instance_of? String
+             CommandLineBinding.load({ 'valueFrom' => body_ },
+                                     runtime['docdir'].first, {}, {})
+           else
+             body_
+           end
+    {
+      'key' => [i, idx],
+      'binding' => body,
+      'self' => nil,
+      'type' => nil,
+    }
   }
 
+  # 4.1 (2), (3)
+  inps_ = walk(cwl, '.inputs', []).map{ |inp|
+    traverse_inputs(inp.id, inp, runtime, inputs.fetch(inp.id, nil))
+  }.flatten.compact.map{ |inp|
+    i = inp['inputBinding'].position ? inp['inputBinding'].position : 0
+    {
+      'key' => [i, inp['id']],
+      'binding' => inp['inputBinding'],
+      'self' => inp['self'],
+      'type' => inp['type'],
+    }
+  }
+
+  # 4.1 (4)
+  sorted = binding_sort(arguments+inps_)
+
+  # 4.1 (5)
+  ret = sorted.map{ |obj|
+    apply_rule(obj['binding'], obj['type'], cwl, inputs, runtime, obj['self'])
+  }
+
+  ret.join(' ')
+end
+
+def traverse_inputs(id, arg, runtime, self_)
+  if arg.inputBinding
+    {
+      'id' => id,
+      'inputBinding' => arg.inputBinding,
+      'self' => self_,
+      'type' => arg.type,
+    }
+  elsif arg.type.instance_of? CWLType
+    nil
+  elsif arg.type.instance_of? CommandInputUnionSchema
+    clb = arg.dup
+    clb.type = self_.type
+    traverse_inputs(id, clb, runtime, self_.value)
+  else
+    type = arg.type
+    case type.type
+    when 'record'
+      ret = type.fields.map{ |f|
+        traverse_inputs(f.name, f, runtime, self_.fetch(f.name, nil))
+      }.flatten.compact
+      ret.empty? ? nil : ret
+    when 'enum'
+      if type.inputBinding
+        {
+          'id' => id,
+          'inputBinding' => type.inputBinding,
+          'self' => self_,
+          'type' => CWLType.load('string', nil, {}, {}),
+        }
+      end
+    when 'array'
+      # To be clarified for both cases
+      if type.inputBinding
+        self_.to_enum.with_index.map{ |s, idx|
+          {
+            'id' => idx,
+            'inputBinding' => type.inputBinding,
+            'self' => s,
+            'type' => type.items,
+          }
+        }
+      else
+        ret = self_.to_enum.with_index.map{ |s, idx|
+          traverse_inputs(idx, CommandInputParameter.load({
+                                                            'id' => idx.to_s,
+                                                            'type' => type.items.to_h,
+                                                          }, runtime['docdir'].first, {}, {}),
+                          runtime, s)
+        }.flatten.compact
+        ret.empty? ? nil : ret
+      end
+    else
+      raise "Unknown type: #{type.to_h}"
+    end
+  end
+end
+
+def binding_sort(arr)
   arr.sort{ |a, b|
-    a0, b0 = a[0], b[0]
+    a0, b0 = a['key'], b['key']
     if a0[0] == b0[0]
       a01, b01 = a0[1], b0[1]
       if a01.class == b01.class
@@ -259,8 +260,131 @@ def construct_args(cwl, runtime, inputs, self_)
       a0[0] <=> b0[0]
     end
   }.map{ |v|
-    v[1]
-  }.flatten(1)
+    v.select{ |k, _|
+      k != 'key'
+    }
+  }
+end
+
+def apply_rule(binding_, type_, cwl, inputs, runtime, self_)
+  if type_.instance_of? CommandInputUnionSchema
+    return apply_rule(binding_, self_.type, cwl, inputs, runtime, self_.value)
+  elsif type_.instance_of?(CWLType) and type_.type == 'null'
+    return nil
+  end
+
+  value, type = if self_.instance_of? UninstantiatedVariable
+                  v = binding_.valueFrom ? UninstantiatedVariable.new("eval(#{self_.name})") : self_
+                  [v, type_]
+                elsif binding_.valueFrom
+                  v = binding_.valueFrom.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
+                                                  inputs, runtime, self_)
+                  [v, guess_type(v)]
+                else
+                  t = if type_.nil? or
+                        (type_.instance_of?(CWLType) and type_.type == 'Any')
+                        guess_type(self_)
+                      else
+                        type_
+                      end
+                  [self_, t]
+                end
+  shellQuote = if get_requirement(cwl, 'ShellCommandRequirement')
+                 walk(binding_, '.shellQuote', true)
+               else
+                 true
+               end
+
+  pre = walk(binding_, '.prefix')
+  if value.instance_of? UninstantiatedVariable
+    name = shellQuote ? %!"#{self_.name}"! : self_.name
+    tmp = pre ? [pre, name] : [name]
+    return walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+  end
+
+  case type
+  when CWLType
+    case type.type
+    when 'null'
+      nil
+    when 'boolean'
+      if value
+        pre
+      end
+    when 'int', 'long', 'float', 'double'
+      tmp = pre ? [pre, value] : [value]
+      walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+    when 'string'
+      val = shellQuote ? %!"#{value.gsub(/"/, '\\"')}"! : value
+      tmp = pre ? [pre, val] : [val]
+      walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+    when 'File', 'Directory'
+      tmp = pre ? [pre, %!"#{value.path}"!] : [%!"#{value.path}"!]
+      walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+    else
+      raise CWLInspectionError, "Unsupported type: #{type}"
+    end
+  when CommandInputRecordSchema
+    raise CWLInspectionError, "Unsupported record type: #{type}"
+    raise CWLInspectionError, "Unsupported value: #{obj}:#{type}" unless value.instance_of? CWLRecordValue
+    # 4.1 (2), (3)
+    inputs = value.fields.map{ |f, v_|
+      traverse_inputs(f, type.fields[f], runtime, v_)
+    }.flatten.compact.map{ |inp|
+      i = inp['inputBinding'].position ? inp['inputBinding'].position : 0
+      {
+        'key' => [i, inp.id],
+        'binding' => inp['inputBinding'],
+        'self' => inp['self'],
+      }
+    }
+
+    # 4.1 (4)
+    sorted = binding_sort(inputs)
+
+    # 4.1 (5)
+    fields = sorted.map{ |obj|
+      apply_rule(obj['binding'], obj['type'], cwl, inputs, runtime, obj['self'])
+    }
+
+  # separate do nothing with record types
+    if pre
+      (pre+fields).join(' ')
+    else
+      fields.join(' ')
+    end
+  when CommandInputEnumSchema
+    tmp = pre ? [pre, value] : [value]
+    arg1 = walk(binding_, '.separate', true) ? tmp.join(' ') : tmp.join
+    # To be clarified
+    arg2 = if type.inputBinding
+             apply_rule(type.inputBinding, CWLType.load('string', nil, {}, {}),
+                        cwl, inputs, runtime, value)
+           end
+    [arg1, arg2].compact.join(' ')
+  when CommandInputArraySchema
+    if value.empty?
+      return nil
+    end
+    isep = walk(binding_, '.itemSeparator', nil)
+    sep = isep.nil? ? true : walk(binding_, '.separate', true)
+    isep = (isep or ' ')
+
+    vals = value.map{ |v_|
+      elem_binding = if type.inputBinding
+                       type.inputBinding
+                     else
+                       CommandLineBinding.load({}, runtime['docdir'].first, {}, {})
+                     end
+      apply_rule(elem_binding, type.items, cwl, inputs, runtime, v_)
+    }
+    tmp = pre ? [pre, vals.join(isep)] : [vals.join(isep)]
+    sep ? tmp.join(' ') : tmp.join
+  when CommandInputUnionSchema
+    raise CWLInspectionError, "Internal error: this statement should not be executed"
+  else
+    raise CWLInspectionError, "Unsupported type: #{value}:#{type}:#{value}"
+  end
 end
 
 def container_command(cwl, runtime, inputs = nil, self_ = nil, container = :docker)
@@ -309,12 +433,11 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
             else
               []
             end
-  command = [
-    *walk(cwl, '.baseCommand', []).map{ |cmd|
-      %!"#{cmd}"!
-    },
-    *construct_args(cwl, replaced_runtime, replaced_inputs, self_),
-  ]
+
+  command = walk(cwl, '.baseCommand', []).map{ |cmd|
+    %!"#{cmd}"!
+  }.join(' ')+' '+construct_args(cwl, replaced_runtime, replaced_inputs, self_)
+
   shell = case RUBY_PLATFORM
           when /darwin|mac os/
             # sh in macOS has an issue in the `echo` command.
@@ -330,12 +453,12 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
           [shell, '-c',
            "'" + [
              docker_requirement(cwl).nil? ? 'cd ~' : nil,
-             command.join(' ').gsub(/'/) { "'\\''" }
+             command.gsub(/'/) { "'\\''" }
            ].compact.join(' && ') + "'" ]
         else
           [
             docker_requirement(cwl).nil? ? 'cd ~' : nil,
-            command.join(' '),
+            command,
           ].compact.join(' && ')
         end
   [
@@ -590,8 +713,8 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
     unless obj.instance_of? Array
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
     end
-    obj.map{ |o|
-      parse_object(id, t, o, nil, loadContents, docdir)
+    obj.map{ |o_|
+      parse_object(id, t, o_, nil, loadContents, docdir)
     }
   else
     raise CWLInspectionError, "Unsupported type: #{type.class}"
