@@ -205,7 +205,7 @@ def traverse_inputs(id, arg, runtime, self_)
     case type.type
     when 'record'
       ret = type.fields.map{ |f|
-        traverse_inputs(f.name, f, runtime, self_.fetch(f.name, nil))
+        traverse_inputs(f.name, f, runtime, self_.fields.fetch(f.name, nil))
       }.flatten.compact
       ret.empty? ? nil : ret
     when 'enum'
@@ -781,51 +781,51 @@ def list_(cwl, output, runtime, inputs)
     if type.instance_of?(CWLType) and type.type == 'null'
       return nil
     end
-    obj = walk(cwl, ".outputs.#{output.id}")
-    type = obj.type
-    oBinding = obj.outputBinding
-    if oBinding.nil?
-      raise CWLInspectionError, 'Not yet supported for outputs without outputBinding'
-    end
-    loadContents = oBinding.loadContents
-    dir = runtime['outdir']
-    files = oBinding.glob.map{ |g|
-      pats = g.evaluate(use_js, inputs, runtime, nil)
-      pats = pats.instance_of?(Array) ? pats : [pats]
-      pats.map{ |p|
-        Dir.glob(p, base: dir).map{ |f|
-          path = File.expand_path(f, dir)
-          if File.directory? path
-            Directory.load({
-                             'class' => 'Directory',
-                             'location' => 'file://'+path,
-                           }, runtime['docdir'].first, {}, {}) # TODO
-          else
-            CWLFile.load({
-                           'class' => 'File',
-                           'location' => 'file://'+path,
-                         }, runtime['docdir'].first, {}, {}) # TODO
-          end
-        }.map{ |f|
-          f.evaluate(runtime['docdir'].first, loadContents)
-        }.sort_by{ |f| f.basename }
-      }
-    }.flatten
-    evaled = if oBinding.outputEval
-               oBinding.outputEval.evaluate(use_js, inputs, runtime, files)
+    oBinding = output.outputBinding
+    evaled = if oBinding
+               loadContents = oBinding.loadContents
+               dir = runtime['outdir']
+               files = oBinding.glob.map{ |g|
+                 pats = g.evaluate(use_js, inputs, runtime, nil)
+                 pats = pats.instance_of?(Array) ? pats : [pats]
+                 pats.map{ |p|
+                   Dir.glob(p, base: dir).map{ |f|
+                     path = File.expand_path(f, dir)
+                     if File.directory? path
+                       Directory.load({
+                                        'class' => 'Directory',
+                                        'location' => 'file://'+path,
+                                      }, runtime['docdir'].first, {}, {}) # TODO
+                     else
+                       CWLFile.load({
+                                      'class' => 'File',
+                                      'location' => 'file://'+path,
+                                    }, runtime['docdir'].first, {}, {}) # TODO
+                     end
+                   }.map{ |f|
+                     f.evaluate(runtime['docdir'].first, loadContents)
+                   }.sort_by{ |f| f.basename }
+                 }
+               }.flatten
+               if oBinding.outputEval
+                 oBinding.outputEval.evaluate(use_js, inputs, runtime, files)
+               else
+                 files
+               end
              else
-               files
+               nil
              end
 
+    type = output.type
     if type.instance_of?(CWLType) and (type.type == 'File' or
                                        type.type == 'Directory')
       ret = evaled.first
       if type.type == 'File'
-        if output.format
+        if walk(output, '.format', nil)
           ret.format = output.format.evaluate(use_js, inputs, runtime)
         end
-        unless obj.secondaryFiles.empty?
-          ret.secondaryFiles = obj.secondaryFiles.map{ |sec|
+        unless walk(output, '.secondaryFiles', []).empty?
+          ret.secondaryFiles = output.secondaryFiles.map{ |sec|
             case sec
             when String
               glob = if sec.match(/^(\^+)(.+)$/)
@@ -868,6 +868,14 @@ def list_(cwl, output, runtime, inputs)
         end
       end
       ret
+    elsif type.instance_of?(CommandOutputRecordSchema)
+      if evaled
+        evaled
+      else
+        CWLRecordValue.new(Hash[type.fields.map{ |f|
+                                  [f.name, list_(cwl, f, runtime, inputs)]
+                                }])
+      end
     elsif type.instance_of?(CommandOutputArraySchema) and
          (type.items == 'File' or type.items == 'Directory')
       ret = evaled
