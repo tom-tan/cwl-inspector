@@ -325,22 +325,23 @@ def apply_rule(binding_, type_, cwl, inputs, runtime, self_)
       raise CWLInspectionError, "Unsupported type: #{type}"
     end
   when CommandInputRecordSchema
-    raise CWLInspectionError, "Unsupported record type: #{type}"
     raise CWLInspectionError, "Unsupported value: #{obj}:#{type}" unless value.instance_of? CWLRecordValue
     # 4.1 (2), (3)
-    inputs = value.fields.map{ |f, v_|
-      traverse_inputs(f, type.fields[f], runtime, v_)
+    inps = value.fields.map{ |f, v_|
+      idx = type.fields.index{ |fi| fi.name == f }
+      traverse_inputs(f, type.fields[idx], runtime, v_)
     }.flatten.compact.map{ |inp|
       i = inp['inputBinding'].position ? inp['inputBinding'].position : 0
       {
-        'key' => [i, inp.id],
+        'key' => [i, inp['id']],
         'binding' => inp['inputBinding'],
         'self' => inp['self'],
+        'type' => inp['type'],
       }
     }
 
     # 4.1 (4)
-    sorted = binding_sort(inputs)
+    sorted = binding_sort(inps)
 
     # 4.1 (5)
     fields = sorted.map{ |obj|
