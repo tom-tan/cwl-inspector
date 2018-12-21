@@ -1176,7 +1176,7 @@ class CommandInputRecordSchema < CWLObject
                   CommandInputRecordField.load(f, dir, frags, nss)
                 }
               else
-                obj.map{ |k, v|
+                obj['fields'].map{ |k, v|
                   o = if v.instance_of? String or
                         v.instance_of? Array or
                         ['record', 'enum', 'array'].include? v.fetch('type', nil)
