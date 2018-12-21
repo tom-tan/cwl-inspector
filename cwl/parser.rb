@@ -4218,8 +4218,10 @@ class InputParameter
                [f.name, self.parse_object(f.type, obj[f.name], dir, frags, nss)]
              }])
     when CommandInputEnumSchema, InputEnumSchema
-      unless obj.instance_of?(String) and type.symbols.include? obj
-        raise CWLInspectionError, 'CommandInputEnumSchema is not suppported'
+      syms = type.symbols.map{ |s| s.to_sym }
+      unless (obj.instance_of?(String) or obj.instance_of?(Symbol)) and
+            syms.include? obj.to_sym
+        raise CWLInspectionError, "Invalid value: #{obj} but #{syms} is expected"
       end
       obj.to_sym
     when CommandInputArraySchema, InputArraySchema
@@ -4339,6 +4341,11 @@ def guess_type(value)
                                    'type' => 'array',
                                    'items' => type
                                  }, nil, {}, {})
+  when Symbol
+    CommandInputEnumSchema.load({
+                                  'type' => 'enum',
+                                  'symbols' => [value.to_s],
+                                }, nil, {}, {})
   when CWLFile
     CWLType.load('File', nil, {}, {})
   when Directory
