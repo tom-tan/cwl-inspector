@@ -851,18 +851,26 @@ def list_(cwl, output, runtime, inputs)
                 end
               }
             when Expression
-              e = sec.evaluate(use_js, inputs, runtime, ret)
-              case e
-              when String
-                CWLFile.load({
-                               'class' => 'File',
-                               'path' => e,
-                             }, ret.dirname, {}, {})
-              when CWLFile, Directory
-                e
-              else
-                raise CWLInspectionError, "Unknow secondary File type: #{e.class}"
+              evaled = sec.evaluate(use_js, inputs, runtime, ret)
+              unless evaled.instance_of? Array
+                evaled = [evaled]
               end
+              evaled.map{ |e|
+                if e.instance_of? CWLUnionValue
+                  e = e.value
+                end
+                case e
+                when String
+                  CWLFile.load({
+                                 'class' => 'File',
+                                 'path' => e,
+                               }, ret.dirname, {}, {})
+                when CWLFile, Directory
+                  e
+                else
+                  raise CWLInspectionError, "Unknow evaled secondary File type: #{e.class}"
+                end
+              }
             end
           }.flatten
         end
