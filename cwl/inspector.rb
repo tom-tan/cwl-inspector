@@ -568,13 +568,14 @@ def parse_inputs(cwl, inputs, docdir)
     valids = Hash[walk(cwl, '.inputs', []).map{ |inp|
                     [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
                                           inp.default, walk(inp, '.inputBinding.loadContents', false),
+                                          walk(inp, '.secondaryFiles', []),
                                           docdir)]
                   }]
     invalids.merge(valids)
   end
 end
 
-def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, outdir = nil)
+def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, dockerReq = nil, outdir = nil)
   if type.nil?
     type = guess_type(obj)
   elsif type.instance_of?(CWLType) and type.type == 'Any'
@@ -693,7 +694,7 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
   when CommandInputUnionSchema, InputUnionSchema
     idx = type.types.find_index{ |t|
       begin
-        parse_object(id, t, obj, default, loadContents, docdir)
+        parse_object(id, t, obj, default, loadContents, secondaryFiles, docdir)
         true
       rescue CWLInspectionError
         false
@@ -704,12 +705,12 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
     end
     CWLUnionValue.new(type.types[idx],
                       parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
-                                   loadContents, docdir))
+                                   loadContents, secondaryFiles, docdir))
   when CommandInputRecordSchema, InputRecordSchema
     obj = obj.nil? ? default : obj
     CWLRecordValue.new(Hash[type.fields.map{ |f|
                               [f.name, parse_object(nil, f.type, obj.fetch(f.name, nil), nil,
-                                                    loadContents, docdir)]
+                                                    loadContents, secondaryFiles, docdir)]
                             }])
   when CommandInputEnumSchema, InputEnumSchema
     unless obj.instance_of?(String) and type.symbols.include? obj
@@ -722,7 +723,7 @@ def parse_object(id, type, obj, default, loadContents, docdir, dockerReq = nil, 
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
     end
     obj.map{ |o_|
-      parse_object(id, t, o_, nil, loadContents, docdir)
+      parse_object(id, t, o_, nil, loadContents, secondaryFiles, docdir)
     }
   else
     raise CWLInspectionError, "Unsupported type: #{type.class}"
@@ -741,7 +742,8 @@ def list(cwl, runtime, inputs)
     }
     Hash[json.each.map{ |k, v|
            [k,
-            parse_object(k, nil, v, nil, false, runtime['docdir'].first,
+            parse_object(k, nil, v, nil, false, [],
+                         runtime['docdir'].first,
                          docker_requirement(cwl), dir).to_h]
          }]
   else
@@ -833,52 +835,7 @@ def list_(cwl, output, runtime, inputs)
         end
         unless walk(output, '.secondaryFiles', []).empty?
           ret.secondaryFiles = output.secondaryFiles.map{ |sec|
-            case sec
-            when String
-              glob = if sec.match(/^(\^+)(.+)$/)
-                       num, ext = $1.length, $2
-                       r = ret.basename
-                       num.times{ r = File.basename(r, '.*') }
-                       r+ext
-                     else
-                       sec
-                     end
-              Dir.glob("*#{glob}", base: runtime['outdir']).map{ |f|
-                path = File.expand_path(f, dir)
-                if File.directory? path
-                  Directory.load({
-                                   'class' => 'Directory',
-                                   'location' => 'file://'+path,
-                                 }, runtime['docdir'].first, {}, {})
-                else
-                  CWLFile.load({
-                                 'class' => 'File',
-                                 'location' => 'file://'+path,
-                               }, runtime['docdir'].first, {}, {})
-                end
-              }
-            when Expression
-              evaled = sec.evaluate(use_js, inputs, runtime, ret)
-              unless evaled.instance_of? Array
-                evaled = [evaled]
-              end
-              evaled.map{ |e|
-                if e.instance_of? CWLUnionValue
-                  e = e.value
-                end
-                case e
-                when String
-                  CWLFile.load({
-                                 'class' => 'File',
-                                 'path' => e,
-                               }, ret.dirname, {}, {})
-                when CWLFile, Directory
-                  e
-                else
-                  raise CWLInspectionError, "Unknow evaled secondary File type: #{e.class}"
-                end
-              }
-            end
+            listSecondaryFiles(ret, sec, inputs, runtime, use_js)
           }.flatten
         end
       end
@@ -911,6 +868,55 @@ def list_(cwl, output, runtime, inputs)
       # TODO
       evaled
     end
+  end
+end
+
+def listSecondaryFiles(file, sec, inputs, runtime, use_js)
+  case sec
+  when String
+    glob = if sec.match(/^(\^+)(.+)$/)
+             num, ext = $1.length, $2
+             r = file.basename
+             num.times{ r = File.basename(r, '.*') }
+             r+ext
+           else
+             sec
+           end
+    Dir.glob("*#{glob}", base: runtime['outdir']).map{ |f|
+      path = File.expand_path(f, runtime['outdir'])
+      if File.directory? path
+        Directory.load({
+                         'class' => 'Directory',
+                         'location' => 'file://'+path,
+                       }, runtime['docdir'].first, {}, {})
+      else
+        CWLFile.load({
+                       'class' => 'File',
+                       'location' => 'file://'+path,
+                     }, runtime['docdir'].first, {}, {})
+      end
+    }
+  when Expression
+    evaled = sec.evaluate(use_js, inputs, runtime, file)
+    unless evaled.instance_of? Array
+      evaled = [evaled]
+    end
+    evaled.map{ |e|
+      if e.instance_of? CWLUnionValue
+        e = e.value
+      end
+      case e
+      when String
+        CWLFile.load({
+                       'class' => 'File',
+                       'path' => e,
+                     }, file.dirname, {}, {})
+      when CWLFile, Directory
+        e
+      else
+        raise CWLInspectionError, "Unknow evaled secondary File type: #{e.class}"
+      end
+    }
   end
 end
 
