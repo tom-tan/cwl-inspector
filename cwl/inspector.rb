@@ -882,18 +882,18 @@ def listSecondaryFiles(file, sec, inputs, runtime, use_js)
            else
              sec
            end
-    Dir.glob("*#{glob}", base: runtime['outdir']).map{ |f|
-      path = File.expand_path(f, runtime['outdir'])
+    Dir.glob("*#{glob}", base: file.dirname).map{ |f|
+      path = File.expand_path(f, file.dirname)
       if File.directory? path
         Directory.load({
                          'class' => 'Directory',
                          'location' => 'file://'+path,
-                       }, runtime['docdir'].first, {}, {})
+                       }, file.dirname, {}, {})
       else
         CWLFile.load({
                        'class' => 'File',
                        'location' => 'file://'+path,
-                     }, runtime['docdir'].first, {}, {})
+                     }, file.dirname, {}, {})
       end
     }
   when Expression
