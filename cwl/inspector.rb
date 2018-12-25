@@ -115,6 +115,13 @@ def dockerized(input, type, vardir)
       ret = input.clone
       ret.path = container_path
       ret.location = 'file://'+ret.path
+      if type.type == 'File' and not input.secondaryFiles.empty?
+        sec_, vols = input.secondaryFiles.map{ |sec|
+          dockerized(sec, guess_type(sec), vardir)
+        }.transpose.map{ |r| r.flatten }
+        ret.secondaryFiles = sec_
+        vol.push(*vols)
+      end
       [ret, vol]
     else
       [input, []]
