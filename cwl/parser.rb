@@ -768,7 +768,11 @@ class CWLInputType
       f = frags[$1]
       self.load(f, dir, frags, nss)
     else
-      raise CWLParseError, "Unimplemented type: #{obj}"
+      if obj.instance_of?(String) and frags.include? obj
+        self.load(frags[obj], dir, frags, nss)
+      else
+        raise CWLParseError, "Unimplemented type: #{obj}"
+      end
     end
   end
 end
@@ -806,7 +810,11 @@ class CWLCommandInputType
     when /^#(.+)$/
       self.load(frags[$1], dir, frags, nss)
     else
-      raise CWLParseError, "Unimplemented type: #{obj}"
+      if obj.instance_of?(String) and frags.include? obj
+        self.load(frags[obj], dir, frags, nss)
+      else
+        raise CWLParseError, "Unimplemented type: #{obj}"
+      end
     end
   end
 end
@@ -1924,7 +1932,7 @@ class InputRecordSchema < CWLObject
                   InputRecordField.load(f, dir, frags, nss)
                 }
               else
-                obj.map{ |k, v|
+                obj['fields'].map{ |k, v|
                   o = if v.instance_of? String or
                         v.instance_of? Array or
                         ['record', 'enum', 'array'].include? v.fetch('type', nil)
