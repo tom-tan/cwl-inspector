@@ -569,13 +569,13 @@ def parse_inputs(cwl, inputs, docdir)
                     [inp.id, parse_object(inp.id, inp.type, inputs.fetch(inp.id, nil),
                                           inp.default, walk(inp, '.inputBinding.loadContents', false),
                                           walk(inp, '.secondaryFiles', []),
-                                          docdir)]
+                                          cwl, docdir)]
                   }]
     invalids.merge(valids)
   end
 end
 
-def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, dockerReq = nil, outdir = nil)
+def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docdir, outdir = nil)
   if type.nil?
     type = guess_type(obj)
   elsif type.instance_of?(CWLType) and type.type == 'Any'
@@ -622,6 +622,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, d
       if obj.nil? and default.nil?
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
+      dockerReq = docker_requirement(cwl)
       file = if dockerReq
                vardir = case RUBY_PLATFORM
                         when /darwin|mac os/
@@ -653,6 +654,12 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, d
                  CWLFile.load(obj, docdir, {}, {})
                end
              end
+      unless secondaryFiles.empty?
+        file.secondaryFiles = secondaryFiles.map{ |sec|
+          listSecondaryFiles(file, sec, {}, { 'docdir' => [docdir] },
+                             get_requirement(cwl, 'InlineJavascriptRequirement'))
+        }.flatten
+      end
       file.evaluate(docdir, loadContents)
     when 'Directory'
       if obj.nil? and default.nil?
@@ -694,7 +701,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, d
   when CommandInputUnionSchema, InputUnionSchema
     idx = type.types.find_index{ |t|
       begin
-        parse_object(id, t, obj, default, loadContents, secondaryFiles, docdir)
+        parse_object(id, t, obj, default, loadContents, secondaryFiles, cwl, docdir)
         true
       rescue CWLInspectionError
         false
@@ -705,12 +712,12 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, d
     end
     CWLUnionValue.new(type.types[idx],
                       parse_object("#{id}[#{idx}]", type.types[idx], obj, default,
-                                   loadContents, secondaryFiles, docdir))
+                                   loadContents, secondaryFiles, cwl, docdir))
   when CommandInputRecordSchema, InputRecordSchema
     obj = obj.nil? ? default : obj
     CWLRecordValue.new(Hash[type.fields.map{ |f|
                               [f.name, parse_object(nil, f.type, obj.fetch(f.name, nil), nil,
-                                                    loadContents, secondaryFiles, docdir)]
+                                                    loadContents, secondaryFiles, cwl, docdir)]
                             }])
   when CommandInputEnumSchema, InputEnumSchema
     unless obj.instance_of?(String) and type.symbols.include? obj
@@ -723,7 +730,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, docdir, d
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
     end
     obj.map{ |o_|
-      parse_object(id, t, o_, nil, loadContents, secondaryFiles, docdir)
+      parse_object(id, t, o_, nil, loadContents, secondaryFiles, cwl, docdir)
     }
   else
     raise CWLInspectionError, "Unsupported type: #{type.class}"
@@ -742,9 +749,8 @@ def list(cwl, runtime, inputs)
     }
     Hash[json.each.map{ |k, v|
            [k,
-            parse_object(k, nil, v, nil, false, [],
-                         runtime['docdir'].first,
-                         docker_requirement(cwl), dir).to_h]
+            parse_object(k, nil, v, nil, false, [], cwl,
+                         runtime['docdir'].first, dir).to_h]
          }]
   else
     Hash[walk(cwl, '.outputs', []).map { |o|
