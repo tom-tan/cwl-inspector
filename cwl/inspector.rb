@@ -356,7 +356,7 @@ def apply_rule(binding_, type_, cwl, inputs, runtime, self_)
       apply_rule(obj['binding'], obj['type'], cwl, inputs, runtime, obj['self'])
     }
 
-  # separate do nothing with record types
+    # separate do nothing with record types
     if pre
       (pre+fields).join(' ')
     else
@@ -667,36 +667,36 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
       dir = if dockerReq
-               vardir = case RUBY_PLATFORM
-                        when /darwin|mac os/
-                          '/private/var'
-                        when /linux/
-                          '/var'
-                        else
-                          raise "Unsupported platform: #{RUBY_PLATFORM}"
-                        end
-               workdir = (dockerReq.dockerOutputDirectory or "#{vardir}/spool/cwl")
-               if obj.nil?
-                 default
-               else
-                 unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
-                   raise CWLInspectionError, "Invalid Directory object: #{obj}"
-                 end
-                 o = obj.dup
-                 o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
-                 o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
-                 Directory.load(o, docdir, {}, {})
-               end
-             else
-               if obj.nil?
-                 default
-               else
-                 unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
-                   raise CWLInspectionError, "Invalid Directory object: #{obj}"
-                 end
-                 Directory.load(obj, docdir, {}, {})
-               end
-             end
+              vardir = case RUBY_PLATFORM
+                       when /darwin|mac os/
+                         '/private/var'
+                       when /linux/
+                         '/var'
+                       else
+                         raise "Unsupported platform: #{RUBY_PLATFORM}"
+                       end
+              workdir = (dockerReq.dockerOutputDirectory or "#{vardir}/spool/cwl")
+              if obj.nil?
+                default
+              else
+                unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
+                  raise CWLInspectionError, "Invalid Directory object: #{obj}"
+                end
+                o = obj.dup
+                o['path'] = obj['path'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'path'
+                o['location'] = obj['location'].sub(%r!^(file://)?#{workdir}!, "\\1#{outdir}") if o.include? 'location'
+                Directory.load(o, docdir, {}, {})
+              end
+            else
+              if obj.nil?
+                default
+              else
+                unless obj.instance_of?(Hash) and obj.fetch('class', '') == 'Directory'
+                  raise CWLInspectionError, "Invalid Directory object: #{obj}"
+                end
+                Directory.load(obj, docdir, {}, {})
+              end
+            end
       dir.evaluate(docdir, nil)
     end
   when CommandInputUnionSchema, InputUnionSchema
