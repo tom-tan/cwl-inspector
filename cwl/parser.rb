@@ -3872,23 +3872,23 @@ class ExpressionTool < CWLObject
                 }
               end
     @outputs = if obj['outputs'].instance_of? Array
-                obj['outputs'].map{ |o|
-                  ExpressionToolOutputParameter.load(o, dir, frags, nss)
-                }
-              else
-                obj['outputs'].map{ |k, v|
-                  o = if v.instance_of? String or
-                        v.instance_of? Array or
-                        ['record', 'enum', 'array'].include? v.fetch('type', nil)
-                        {
-                          'id' => k,
-                          'type' => v,
-                        }
-                      else
-                        v.merge({ 'id' => k })
-                      end
-                  ExpressionToolOutputParameter.load(o, dir, frags, nss)
-                }
+                 obj['outputs'].map{ |o|
+                   ExpressionToolOutputParameter.load(o, dir, frags, nss)
+                 }
+               else
+                 obj['outputs'].map{ |k, v|
+                   o = if v.instance_of? String or
+                         v.instance_of? Array or
+                         ['record', 'enum', 'array'].include? v.fetch('type', nil)
+                         {
+                           'id' => k,
+                           'type' => v,
+                         }
+                       else
+                         v.merge({ 'id' => k })
+                       end
+                   ExpressionToolOutputParameter.load(o, dir, frags, nss)
+                 }
                end
     @class_ = obj['class']
     @expression = Expression.load(obj['expression'], dir, frags, nss)
