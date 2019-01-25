@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 # coding: utf-8
+# frozen_string_literal: true
 
 #
 # Copyright (c) 2018 Tomoya Tanjo
@@ -69,7 +70,7 @@ end
 def import_resource(uri, basedir)
   obj = case uri
         when %r|^https?://|
-          YAML.load(open(uri, :open_timeout => 2))
+          YAML.load(open(uri, open_timeout: 2))
         when %r|^file://(.+)$|
           YAML.load_file($1)
         when %r|^/|
@@ -83,7 +84,7 @@ end
 def include_resource(uri, basedir)
   case uri
   when %r|^https?://|
-    open(uri, :open_timeout => 2).read
+    open(uri, open_timeout: 2).read
   when %r|^file://(.+)$|
     open($1).read
   when %r|^/|

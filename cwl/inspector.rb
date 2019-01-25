@@ -75,7 +75,7 @@ def docker_command(cwl, runtime, inputs)
     cmd = [
       'docker', 'run', '-i', '--read-only', '--rm',
       "--workdir=#{workdir}", "--env=HOME=#{workdir}",
-      "--env=TMPDIR=/tmp", *envArgs,
+      '--env=TMPDIR=/tmp', *envArgs,
       "--user=#{Process::UID.eid}:#{Process::GID.eid}",
       "-v #{runtime['outdir']}:#{workdir}",
       "-v #{runtime['tmpdir']}:/tmp",
@@ -390,7 +390,7 @@ def apply_rule(binding_, type_, cwl, inputs, runtime, self_)
     tmp = pre ? [pre, vals.join(isep)] : [vals.join(isep)]
     sep ? tmp.join(' ') : tmp.join
   when CommandInputUnionSchema
-    raise CWLInspectionError, "Internal error: this statement should not be executed"
+    raise CWLInspectionError, 'Internal error: this statement should not be executed'
   else
     raise CWLInspectionError, "Unsupported type: #{value}:#{type}:#{value}"
   end
@@ -511,14 +511,14 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
                  coresMax.evaluate(use_js, inputs, runtime, nil)
                end
   end
-  raise "Invalid ResourceRequirement" if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
+  raise 'Invalid ResourceRequirement' if not coresMin.nil? and not coresMax.nil? and coresMax < coresMin
   coresMin = coresMax if coresMin.nil?
   coresMax = coresMin if coresMax.nil?
   ncores = Etc.nprocessors
   runtime['cores'] = if coresMin.nil? and coresMax.nil?
                        ncores
                      else
-                       raise "Invalid ResourceRequirement" if ncores < coresMin
+                       raise 'Invalid ResourceRequirement' if ncores < coresMin
                        [ncores, coresMax].min
                      end
 
@@ -535,14 +535,14 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
                ramMax.evaluate(use_js, inputs, runtime, nil)
              end
   end
-  raise "Invalid ResourceRequirement" if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
+  raise 'Invalid ResourceRequirement' if not ramMin.nil? and not ramMax.nil? and ramMax < ramMin
   ramMin = ramMax if ramMin.nil?
   ramMax = ramMin if ramMax.nil?
   ram = 1024 # default value in cwltool
   runtime['ram'] = if ramMin.nil? and ramMax.nil?
                      ram
                    else
-                     raise "Invalid ResourceRequirement" if ram < ramMin
+                     raise 'Invalid ResourceRequirement' if ram < ramMin
                      [ram, ramMax].min
                    end
   runtime
@@ -982,7 +982,7 @@ if $0 == __FILE__
         end
 
   if inp_obj.nil? and do_eval
-    raise CWLInspectionError, "--evaluate-expressions needs job file"
+    raise CWLInspectionError, '--evaluate-expressions needs job file'
   end
 
   cwl = if file == '-'

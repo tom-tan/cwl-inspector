@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 # coding: utf-8
+# frozen_string_literal: true
 
 #
 # Copyright (c) 2017 Tomoya Tanjo
@@ -64,7 +65,7 @@ end
 class NilClass
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -78,7 +79,7 @@ end
 class Integer
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -92,7 +93,7 @@ end
 class Float
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -106,7 +107,7 @@ end
 class String
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -120,7 +121,7 @@ end
 class TrueClass
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -134,7 +135,7 @@ end
 class FalseClass
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -148,7 +149,7 @@ end
 class Symbol
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
@@ -2697,13 +2698,13 @@ end
 
 def evaluate_parameter_reference(exp, inputs, runtime, self_)
   path = exp.split(/\.|\]\[|\[|\]\.?/).map{ |e|
-    if e.start_with?("\'") or e.start_with?("\"")
+    if e.start_with?("'") or e.start_with?('"')
       e[1...-1]
     else
       e
     end
   }.map{ |e|
-    e.gsub(/\\'/, "'").gsub(/\\"/, "\"")
+    e.gsub(/\\'/, "'").gsub(/\\"/, '"')
   }
   case path.first
   when 'inputs'
@@ -2742,7 +2743,7 @@ def node_bin
   node = ['node', 'nodejs'].find{ |n|
     system("which #{n} > /dev/null")
   }
-  raise "No executables for Nodejs" if node.nil?
+  raise 'No executables for Nodejs' if node.nil?
   node
 end
 
@@ -2870,7 +2871,7 @@ class Expression
 
   def walk(path)
     if path.empty?
-      return self
+      self
     else
       raise CWLInspectionError, "No such field for #{self}: #{path}"
     end
