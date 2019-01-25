@@ -42,7 +42,7 @@ end
 class UnsupportedError < Exception
 end
 
-def walk(cwl, path, default=nil, exception=false)
+def walk(cwl, path, default = nil, exception = false)
   unless path.start_with? '.'
     raise CWLInspectionError, "Invalid path: #{path}"
   end
@@ -165,7 +165,7 @@ class Array
       return self
     end
     idx = path.shift
-    if idx.match(/^\d+$/)
+    if idx.match?(/^\d+$/)
       i = idx.to_i
       if i >= self.length
         raise CWLInspectionError, "Invalid index for #{self.first.class}[]: #{i}"

@@ -27,7 +27,7 @@ require 'etc'
 require 'optparse'
 require_relative 'parser'
 
-def keys(file, path, default=[])
+def keys(file, path, default = [])
   obj = walk(file, path, nil)
   if obj.instance_of?(Array)
     obj.keys
@@ -865,7 +865,7 @@ def list_(cwl, output, runtime, inputs)
       end
       ret
     elsif type.instance_of?(CommandOutputUnionSchema) and
-         type.types.any?{ |t| t.type == 'File' or t.type == 'Directory'}
+         type.types.any?{ |t| t.type == 'File' or t.type == 'Directory' }
       if type.types.include?(CWLType.new('null')) and evaled.empty?
         CWLType.new('null')
       else

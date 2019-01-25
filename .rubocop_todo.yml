@@ -6,29 +6,6 @@
 # Note that changes in the inspected code, or installation of new
 # versions of RuboCop, may require this file to be generated again.
 
-# Offense count: 2
-# Cop supports --auto-correct.
-Layout/ElseAlignment:
-  Exclude:
-    - 'cwl/parser.rb'
-
-# Offense count: 2
-# Cop supports --auto-correct.
-# Configuration parameters: Width, IgnoredPatterns.
-Layout/IndentationWidth:
-  Exclude:
-    - 'cwl/inspector.rb'
-    - 'cwl/parser.rb'
-
-# Offense count: 3
-# Cop supports --auto-correct.
-# Configuration parameters: EnforcedStyle.
-# SupportedStyles: space, no_space
-Layout/SpaceAroundEqualsInParameterDefault:
-  Exclude:
-    - 'cwl/inspector.rb'
-    - 'cwl/parser.rb'
-
 # Offense count: 29
 # Cop supports --auto-correct.
 # Configuration parameters: AllowForAlignment.
@@ -47,21 +24,6 @@ Layout/SpaceBeforeBlockBraces:
     - 'cwl/inspector.rb'
     - 'cwl/parser.rb'
     - 'cwl/schema-salad.rb'
-
-# Offense count: 1
-# Cop supports --auto-correct.
-# Configuration parameters: EnforcedStyle, EnforcedStyleForEmptyBraces, SpaceBeforeBlockParameters.
-# SupportedStyles: space, no_space
-# SupportedStylesForEmptyBraces: space, no_space
-Layout/SpaceInsideBlockBraces:
-  Exclude:
-    - 'cwl/inspector.rb'
-
-# Offense count: 1
-# Cop supports --auto-correct.
-Performance/RegexpMatch:
-  Exclude:
-    - 'cwl/parser.rb'
 
 # Offense count: 167
 # Cop supports --auto-correct.
