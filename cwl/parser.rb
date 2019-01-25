@@ -89,6 +89,20 @@ class Integer
   end
 end
 
+class Float
+  def walk(path)
+    if path.empty?
+      return self
+    else
+      raise CWLInspectionError, "No such field for #{self}: #{path}"
+    end
+  end
+
+  def to_h
+    self
+  end
+end
+
 class String
   def walk(path)
     if path.empty?
