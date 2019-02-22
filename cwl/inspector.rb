@@ -553,7 +553,7 @@ def parse_inputs(cwl, inputs, docdir)
     (inp.type.class == CommandInputUnionSchema and
       inp.type.types.find_index{ |obj|
        obj.instance_of?(CWLType) and obj.type == 'null'
-     }) or not inp.default.nil?
+     }) or not inp.default.instance_of?(InvalidValue)
   }
   if inputs.nil? and input_not_required
     inputs = {}
@@ -591,7 +591,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
   when CWLType
     case type.type
     when 'null'
-      unless obj.nil? and default.nil?
+      unless obj.nil? or default.nil?
         raise CWLInspectionError, "Invalid null object: #{obj}"
       end
       obj
@@ -620,7 +620,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
       end
       obj
     when 'File'
-      if obj.nil? and default.nil?
+      if obj.nil? and (default.nil? or default.instance_of?(InvalidValue))
         raise CWLInspectionError, "Invalid File object: #{obj}"
       end
       dockerReq = docker_requirement(cwl)
@@ -663,7 +663,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
       end
       file.evaluate(docdir, loadContents)
     when 'Directory'
-      if obj.nil? and default.nil?
+      if obj.nil? and (default.nil? or default.instance_of?(InvalidValue))
         raise CWLInspectionError, "Invalid Directory object: #{obj}"
       end
       dir = if dockerReq

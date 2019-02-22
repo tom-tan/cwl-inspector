@@ -640,6 +640,8 @@ class CommandInputParameter < CWLObject
                    raise CWLParseError, 'Unsupported syntax: `default` without `type`'
                  end
                  InputParameter.parse_object(@type, obj['default'], dir, frags, nss)
+               else
+                 InvalidValue.new
                end
   end
 
@@ -673,7 +675,7 @@ class CommandInputParameter < CWLObject
       }
     end
     ret['inputBinding'] = @inputBinding.to_h unless @inputBinding.nil?
-    ret['default'] = @default.to_h unless @default.nil?
+    ret['default'] = @default.to_h unless @default.instance_of?(InvalidValue)
     ret['type'] = @type.to_h unless @type.nil?
     ret
   end
@@ -3651,6 +3653,8 @@ class WorkflowStepInput < CWLObject
                  end
     @default = if obj.include? 'default'
                  InputParameter.parse_object(nil, obj['default'], dir, frags, nss)
+               else
+                 InvalidValue.new
                end
     @valueFrom = if obj.include? 'valueFrom'
                    Expression.load(obj['valueFrom'], dir, frags, nss)
@@ -3668,7 +3672,7 @@ class WorkflowStepInput < CWLObject
     ret['id'] = @id
     ret['source'] = @source unless @source.empty?
     ret['linkMerge'] = @linkMerge unless @linkMerge == 'merge_nested'
-    ret['default'] = @default.to_h unless @default.nil?
+    ret['default'] = @default.to_h unless @default.instance_of?(InvalidValue)
     ret['valueFrom'] = @valueFrom.to_h unless @valueFrom.nil?
     ret
   end
@@ -4082,6 +4086,8 @@ class InputParameter < CWLObject
                    raise CWLParseError, 'Unsupported format: `default` without `type`'
                  end
                  InputParameter.parse_object(@type, obj['default'], dir, frags, nss)
+               else
+                 InvalidValue.new
                end
   end
 
@@ -4113,7 +4119,7 @@ class InputParameter < CWLObject
       ret['format'] = @format.map{ |f| f.to_h }
     end
     ret['inputBinding'] = @inputBinding.to_h unless @inputBinding.nil?
-    ret['default'] = @default.to_h unless @default.nil?
+    ret['default'] = @default.to_h unless @default.instance_of?(InvalidValue)
     ret['type'] = @type.to_h unless @type.nil?
     ret
   end
@@ -4241,6 +4247,9 @@ class InputParameter
         Directory.load(obj, dir, frags, nss)
       end
     when CommandInputRecordSchema, InputRecordSchema
+      if obj.instance_of?(CWLRecordValue)
+        obj = obj.fields
+      end
       CWLRecordValue.new(
         Hash[type.fields.map{ |f|
                [f.name, self.parse_object(f.type, obj[f.name], dir, frags, nss)]
@@ -4261,6 +4270,9 @@ class InputParameter
         self.parse_object(t, o, dir, frags, nss)
       }
     when CommandInputUnionSchema, InputUnionSchema
+      if obj.instance_of?(CWLUnionValue)
+        obj = obj.value
+      end
       idx = type.types.find_index{ |ty|
         begin
           self.parse_object(ty, obj, dir, frags, nss)
@@ -4339,6 +4351,16 @@ def guess_type(value)
     CWLType.load('float', nil, {}, {})
   when String
     CWLType.load('string', nil, {}, {})
+  when CWLRecordValue
+    CommandInputRecordSchema.load({
+                                    'type' => 'record',
+                                    'fields' => value.fields.each.map{ |k, v|
+                                      {
+                                        'name' => k,
+                                        'type' => guess_type(v).to_h,
+                                      }
+                                    }
+                                  }, nil, {}, {})
   when Hash
     case value.fetch('class', nil)
     when 'File'
@@ -4397,6 +4419,9 @@ class InvalidVariable
   def initialize(var)
     @name = var
   end
+end
+
+class InvalidValue
 end
 
 if $0 == __FILE__
