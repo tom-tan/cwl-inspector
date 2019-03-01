@@ -580,10 +580,14 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
   if type.nil?
     type = guess_type(obj)
   elsif type.instance_of?(CWLType) and type.type == 'Any'
-    if obj.nil? and default.nil?
+    if obj.nil? and (default.instance_of?(InvalidValue) or default.nil?)
       raise CWLInspectionError, '`Any` type requires non-null object'
     end
-    v = (obj or default)
+    v = if default.instance_of?(InvalidValue)
+          obj
+        else
+          obj or default
+        end
     type = guess_type(v)
   end
 
@@ -596,25 +600,41 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
       end
       obj
     when 'boolean'
-      obj = obj.nil? ? default : obj
-      unless obj == true or obj == false
+      obj = if default.instance_of?(InvalidValue)
+              obj
+            else
+              obj.nil? ? default : obj
+            end
+      unless obj.instance_of?(TrueClass) or obj.instance_of?(FalseClass)
         raise CWLInspectionError, "Invalid boolean object: #{obj}"
       end
       obj
     when 'int', 'long'
-      obj = obj.nil? ? default : obj
+      obj = if default.instance_of?(InvalidValue)
+              obj
+            else
+              obj.nil? ? default : obj
+            end
       unless obj.instance_of? Integer
         raise CWLInspectionError, "Invalid #{type.type} object: #{obj}"
       end
       obj
     when 'float', 'double'
-      obj = obj.nil? ? default : obj
+      obj = if default.instance_of?(InvalidValue)
+              obj
+            else
+              obj.nil? ? default : obj
+            end
       unless obj.instance_of? Float
         raise CWLInspectionError, "Invalid #{type.type} object: #{obj}"
       end
       obj
     when 'string'
-      obj = obj.nil? ? default : obj
+      obj = if default.instance_of?(InvalidValue)
+              obj
+            else
+              obj.nil? ? default : obj
+            end
       unless obj.instance_of? String
         raise CWLInspectionError, "Invalid string object: #{obj}"
       end
@@ -717,7 +737,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
   when CommandInputRecordSchema, InputRecordSchema
     obj = obj.nil? ? default : obj
     CWLRecordValue.new(Hash[type.fields.map{ |f|
-                              [f.name, parse_object(nil, f.type, obj.fetch(f.name, nil), nil,
+                              [f.name, parse_object(nil, f.type, obj.fetch(f.name, nil), InvalidValue.new,
                                                     loadContents, secondaryFiles, cwl, docdir)]
                             }])
   when CommandInputEnumSchema, InputEnumSchema
@@ -731,7 +751,7 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
       raise CWLInspectionError, "#{input.id} requires array of #{t} type"
     end
     obj.map{ |o_|
-      parse_object(id, t, o_, nil, loadContents, secondaryFiles, cwl, docdir)
+      parse_object(id, t, o_, InvalidValue.new, loadContents, secondaryFiles, cwl, docdir)
     }
   else
     raise CWLInspectionError, "Unsupported type: #{type.class}"

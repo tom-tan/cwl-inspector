@@ -4205,6 +4205,8 @@ class InputParameter
     case obj
     when CWLFile, Directory
       return obj
+    when CWLUnionValue
+      return self.parse_object(obj.type, obj.value, dir, frags, nss)
     end
 
     case type
@@ -4298,11 +4300,15 @@ class CWLUnionValue
   def initialize(type, value)
     @type = type
     @value = value
+    if @type.instance_of?(CWLType) and @type.type == 'null' and
+      not @value.nil?
+      raise "Error in union type value: type is #{@type.to_h} but value is #{@value.to_h}"
+    end
   end
 
   def walk(path)
     if path.empty?
-      @value
+      self
     else
       @value.walk(path[1..-1])
     end
@@ -4322,7 +4328,7 @@ class CWLRecordValue
 
   def walk(path)
     if path.empty?
-      @fields
+      self
     else
       f = path.first
       unless @fields.include? f
@@ -4351,6 +4357,8 @@ def guess_type(value)
     CWLType.load('float', nil, {}, {})
   when String
     CWLType.load('string', nil, {}, {})
+  when CWLUnionValue
+    value.type
   when CWLRecordValue
     CommandInputRecordSchema.load({
                                     'type' => 'record',
