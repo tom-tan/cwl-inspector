@@ -4228,10 +4228,10 @@ class InputParameter
         end
         obj
       when 'float', 'double'
-        unless obj.instance_of?(Float) or obj.instance_of?(Integer)
+        unless obj.instance_of? Float
           raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
         end
-        obj.to_f
+        obj
       when 'string'
         unless obj.instance_of? String
           raise CWLInspectionError, "Invalid value: #{obj} but #{type.type} is expected"
