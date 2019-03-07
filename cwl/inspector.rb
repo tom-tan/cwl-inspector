@@ -625,10 +625,10 @@ def parse_object(id, type, obj, default, loadContents, secondaryFiles, cwl, docd
             else
               obj.nil? ? default : obj
             end
-      unless obj.instance_of? Float
+      unless obj.instance_of?(Float) or obj.instance_of?(Integer)
         raise CWLInspectionError, "Invalid #{type.type} object: #{obj}"
       end
-      obj
+      obj.to_f
     when 'string'
       obj = if default.instance_of?(InvalidValue)
               obj
