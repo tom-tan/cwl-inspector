@@ -518,7 +518,7 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   runtime['cores'] = if coresMin.nil? and coresMax.nil?
                        ncores
                      else
-                       raise 'Invalid ResourceRequirement' if ncores < coresMin
+                       raise "Specified minimum CPU cores (#{coresMin}) is larger than the number of CPU cores (#{ncores})" if ncores < coresMin
                        [ncores, coresMax].min
                      end
 
@@ -542,7 +542,7 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   runtime['ram'] = if ramMin.nil? and ramMax.nil?
                      ram
                    else
-                     raise 'Invalid ResourceRequirement' if ram < ramMin
+                     raise "Specified minimum memory size (#{ramMin} MiB) is larger than the installed memory size (#{ncores} MiB)" if ram < ramMin
                      [ram, ramMax].min
                    end
   runtime
