@@ -42,9 +42,13 @@ def get_requirement(cwl, req, default = nil)
 end
 
 def docker_requirement(cwl)
+  docker_available = system('which docker > /dev/null')
   if walk(cwl, '.requirements.DockerRequirement')
+    unless docker_available
+      raise CWLInspectionError, 'Docker required but not found'
+    end
     walk(cwl, '.requirements.DockerRequirement')
-  elsif walk(cwl, '.hints.DockerRequirement') and system('which docker > /dev/null')
+  elsif walk(cwl, '.hints.DockerRequirement') and docker_available
     walk(cwl, '.hints.DockerRequirement')
   else
     nil
