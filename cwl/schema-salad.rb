@@ -34,8 +34,15 @@ def preprocess(file)
          else
            file
          end
-  obj = YAML.load_file(file)
-  basedir = File.dirname(File.expand_path(file))
+  obj = open(file) { |f|
+    YAML.load(f)
+  }
+  basedir = case file
+            when %r|^file://|, %r|^https://|
+              File.dirname(file)
+            else
+              File.dirname(File.expand_path(file))
+            end
   traverse(obj, basedir)
 end
 

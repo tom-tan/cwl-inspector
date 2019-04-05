@@ -247,7 +247,9 @@ class CommonWorkflowLanguage
     obj = if do_preprocess
             preprocess(file)
           else
-            YAML.load_file(file.sub(/#.*/, ''))
+            open(file.sub(/#.*/, '')) { |f|
+              YAML.load(f)
+            }
           end
     frags = fragments(obj)
     nss = namespaces(obj)
@@ -258,7 +260,13 @@ class CommonWorkflowLanguage
           else # implicit main
             frags['main']
           end
-    self.load(obj, File.dirname(File.expand_path(file)), frags, nss)
+    dir = case file
+          when %r|^file://|, %r|^https?://|
+            File.dirname(file)
+          else
+            File.dirname(File.expand_path(file))
+          end
+    self.load(obj, dir, frags, nss)
   end
 
   def self.load(obj, dir, frags, nss)
@@ -982,9 +990,15 @@ class CWLFile < CWLObject
                                    else
                                      raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                    end
+                                 when %r|^(/.+)$|
+                                   ['file://'+location, location]
                                  else
                                    path = File.expand_path(location, docdir)
-                                   ['file://'+path, path]
+                                   if %r|^(.+)://|
+                                     [path, path]
+                                   else
+                                     ['file://'+path, path]
+                                   end
                                  end
       file.dirname = File.dirname file.path
       file.nameext = File.extname file.path
@@ -1098,9 +1112,16 @@ class Directory < CWLObject
                                  else
                                    raise CWLInspectionError, "Unsupported scheme: #{scheme}"
                                  end
+
+                               elsif location.match %r|^(/.+)$|
+                                   ['file://'+location, location]
                                else
                                  path = File.expand_path(location, docdir)
-                                 ['file://'+path, path]
+                                 if path.match %r|^(.+)://|
+                                   [path, path]
+                                 else
+                                   ['file://'+path, path]
+                                 end
                                end
       dir.basename = if dir.basename
                        dir.basename
