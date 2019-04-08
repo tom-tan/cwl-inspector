@@ -994,7 +994,7 @@ class CWLFile < CWLObject
                                    ['file://'+location, location]
                                  else
                                    path = File.expand_path(location, docdir)
-                                   if %r|^(.+)://|
+                                   if path.match %r|^(.+)://|
                                      [path, path]
                                    else
                                      ['file://'+path, path]
