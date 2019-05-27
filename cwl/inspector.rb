@@ -500,6 +500,12 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
 
   use_js = get_requirement(cwl, 'InlineJavascriptRequirement', false)
   reqs = get_requirement(cwl, 'ResourceRequirement')
+  is_hints = if walk(cwl, ".requirements.#{req}")
+               false
+             elsif walk(cwl, ".hints.#{req}", default)
+               true
+             end
+
   can_eval = inputs.values.find_index{ |v| v.instance_of? UninstantiatedVariable }.nil?
 
   # cores
@@ -522,7 +528,11 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   runtime['cores'] = if coresMin.nil? and coresMax.nil?
                        ncores
                      else
-                       ncores < coresMin ? nil : [ncores, coresMax].min
+                       if ncores < coresMin
+                         is_hints ? ncores : nil
+                       else
+                         [ncores, coresMax].min
+                       end
                      end
 
   # mem
@@ -545,7 +555,11 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   runtime['ram'] = if ramMin.nil? and ramMax.nil?
                      ram
                    else
-                     ram < ramMin ? nil : [ram, ramMax].min
+                     if ram < ramMin
+                       is_hints ? ram : nil
+                     else
+                       [ram, ramMax].min
+                     end
                    end
   runtime
 end
