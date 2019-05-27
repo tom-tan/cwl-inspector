@@ -502,7 +502,7 @@ def eval_runtime(cwl, inputs, outdir, tmpdir)
   reqs = get_requirement(cwl, 'ResourceRequirement')
   is_hints = if walk(cwl, ".requirements.ResourceRequirement")
                false
-             elsif walk(cwl, ".hints.ResourceRequirement", default)
+             elsif walk(cwl, ".hints.ResourceRequirement")
                true
              end
 
