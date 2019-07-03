@@ -484,12 +484,12 @@ def commandline(cwl, runtime = {}, inputs = nil, self_ = nil)
   ].compact.join(' ')
 end
 
-def eval_runtime(cwl, inputs, outdir, tmpdir)
+def eval_runtime(cwl, inputs, outdir, tmpdir, docdir)
   runtime = {
     'tmpdir' => tmpdir,
     'outdir' => outdir,
     'docdir' => [
-      cwl.instance_of?(String) ? File.dirname(File.expand_path cwl) : Dir.pwd,
+      docdir,
       '/usr/share/commonwl',
       '/usr/local/share/commonwl',
       File.join(ENV.fetch('XDG_DATA_HOME',
@@ -1026,9 +1026,9 @@ if $0 == __FILE__
         else
           CommonWorkflowLanguage.load_file(file, do_preprocess)
         end
-  inputs = parse_inputs(cwl, inp_obj,
-                        file == '-' ? Dir.pwd : File.dirname(File.expand_path file))
-  runtime = eval_runtime(file, inputs, outdir, tmpdir)
+  docdir = file == '-' ? Dir.pwd : File.dirname(File.expand_path file)
+  inputs = parse_inputs(cwl, inp_obj, docdir)
+  runtime = eval_runtime(cwl, inputs, outdir, tmpdir, docdir)
 
   ret = case cmd
         when /^\..*/
@@ -1050,7 +1050,8 @@ if $0 == __FILE__
             end
             commandline(cwl, runtime, inputs)
           when 'ExpressionTool'
-            obj = cwl.expression.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
+            obj = cwl.expression.evaluate(get_requirement(cwl, 'InlineJavascriptRequi
+rement', false),
                                           inputs, runtime).to_h
             "echo '#{JSON.dump(obj).gsub("'"){ "\\'" }}' > #{File.join(runtime['outdir'], 'cwl.output.json')}"
           else
