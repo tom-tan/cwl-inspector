@@ -1022,7 +1022,7 @@ if $0 == __FILE__
   end
 
   cwl = if file == '-'
-          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd, {}) # TODO
+          CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd, {}, {})
         else
           CommonWorkflowLanguage.load_file(file, do_preprocess)
         end
