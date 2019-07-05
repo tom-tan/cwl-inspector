@@ -21,5 +21,4 @@ deploy:
   provider: script
   script: sh deploy.sh
   on:
-    branch: master
-    condition: $TRAVIS_OS_NAME = linux
+    condition: ($TRAVIS_OS_NAME = linux) AND ($TRAVIS_PULL_REQUEST = false) AND (branch = master) AND (tag IS present)
