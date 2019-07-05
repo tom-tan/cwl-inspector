@@ -21,4 +21,4 @@ deploy:
   provider: script
   script: sh deploy.sh
   on:
-    condition: $TRAVIS_OS_NAME = linux -a $TRAVIS_PULL_REQUEST = false -a branch = master
+    condition: test $TRAVIS_OS_NAME = linux -a $TRAVIS_PULL_REQUEST = false -a branch = master
