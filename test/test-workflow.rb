@@ -39,7 +39,7 @@ class TestWorkflow < Test::Unit::TestCase
                  else
                    '/bin/sh'
                  end
-            "env HOME='#{Dir.pwd}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"javac\" \"-d\" \"#{Dir.pwd}\" \"#{Dir.pwd}/Foo.java\"'"
+            "env HOME='#{@runtime['outdir']}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"javac\" \"-d\" \"#{@runtime['outdir']}\" \"#{Dir.pwd}/Foo.java\"'"
           end
     assert_equal(cmd, commandline(cwlfile,
                                   @runtime,
