@@ -94,6 +94,18 @@ $ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - .cwlVersion
 --- v1.0
 ```
 
+## using job parameter file
+
+```console
+$ cwltool --make-template echo.cwl > echo.yml
+$ cat echo.yml
+input: a_string  # type "string" (optional)
+$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - echo.yml commandline
+env HOME='/data2/manabu/work/cwlization/pitagora-cwl/tools/fastqc' TMPDIR='/tmp' /bin/sh -c 'cd ~ && "cowsay" "a_string"'
+```
+
+
+
 # License
 This software is released under the [MIT License](https://github.com/tom-tan/cwl-inspector/blob/master/LICENSE).
 
