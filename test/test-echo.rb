@@ -49,7 +49,7 @@ class TestEcho < Test::Unit::TestCase
                  else
                    '/bin/sh'
                  end
-            "env HOME='#{Dir.pwd}' TMP='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" ' > #{Dir.pwd}/output"
+            "env HOME='#{Dir.pwd}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" ' > #{Dir.pwd}/output"
           end
     assert_equal(cmd, commandline(@cwl, @runtime, parse_inputs(@cwl, {}, @runtime)))
   end
