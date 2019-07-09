@@ -22,4 +22,5 @@ deploy:
   script: sh deploy.sh
   on:
     all_branches: true
-    if: os = linux AND env(TRAVIS_PULL_REQUEST) = false
+    os: linux
+    if: env(TRAVIS_PULL_REQUEST) = false
