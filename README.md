@@ -90,7 +90,7 @@ You can use [`ttanjo/cwl-inspector`](https://hub.docker.com/r/ttanjo/cwl-inspect
 This image is built by [Travis CI](https://travis-ci.org/tom-tan/cwl-inspector).
 
 ```console
-$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector - .cwlVersion
+$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector:v0.0.6 - .cwlVersion
 --- v1.0
 ```
 
