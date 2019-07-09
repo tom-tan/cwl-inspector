@@ -14,6 +14,6 @@ outputs:
   output:
     type: stdout
 stdout: output
-requirements:
+hints:
   - class: DockerRequirement
     dockerPull: docker/whalesay

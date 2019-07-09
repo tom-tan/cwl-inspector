@@ -24,6 +24,7 @@ class TestEcho < Test::Unit::TestCase
               else
                 raise "Unsupported platform: #{RUBY_PLATFORM}"
               end
+    @use_docker = system('which docker > /dev/null')
   end
 
   def test_version
@@ -39,19 +40,33 @@ class TestEcho < Test::Unit::TestCase
   end
 
   def test_commandline
-    assert_equal("docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:#{@vardir}/spool/cwl -v /tmp:/tmp docker/whalesay \"cowsay\"  > #{Dir.pwd}/output",
-                 commandline(@cwl, @runtime, parse_inputs(@cwl, {}, @runtime)))
+    cmd = if @use_docker
+            "docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:#{@vardir}/spool/cwl -v /tmp:/tmp docker/whalesay \"cowsay\"  > #{Dir.pwd}/output"
+          else
+            sh = case RUBY_PLATFORM
+                 when /darwin|mac os/
+                   '/bin/bash'
+                 else
+                   '/bin/sh'
+                 end
+            "env HOME='#{Dir.pwd}' TMP='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" ' > #{Dir.pwd}/output"
+          end
+    assert_equal(cmd, commandline(@cwl, @runtime, parse_inputs(@cwl, {}, @runtime)))
   end
 
   def test_instantiated_commandline
-    assert_equal("docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:#{@vardir}/spool/cwl -v /tmp:/tmp docker/whalesay \"cowsay\" \"Hello!\" > #{Dir.pwd}/output",
-                 commandline(@cwl, @runtime,
-                             parse_inputs(@cwl, { 'input' => 'Hello!' }, @runtime)))
+    cmd = if @use_docker
+            "docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:#{@vardir}/spool/cwl -v /tmp:/tmp docker/whalesay \"cowsay\" \"Hello!\" > #{Dir.pwd}/output"
+          else
+            "env HOME='#{Dir.pwd}' TMP='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" \"Hello!\"' > #{Dir.pwd}/output"
+          end
+    assert_equal(cmd, commandline(@cwl, @runtime,
+                                  parse_inputs(@cwl, { 'input' => 'Hello!' }, @runtime)))
   end
 
   def test_root_keys
-    assert_equal(['baseCommand', 'class', 'cwlVersion', 'id',
-                  'inputs', 'outputs', 'requirements', 'stdout', 'successCodes'],
+    assert_equal(['baseCommand', 'class', 'cwlVersion', 'hints', 'id',
+                  'inputs', 'outputs', 'stdout', 'successCodes'],
                  keys(@cwl, '.').sort)
   end
 
