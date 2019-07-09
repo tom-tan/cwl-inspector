@@ -25,21 +25,32 @@ class TestWorkflow < Test::Unit::TestCase
               else
                 raise "Unsupported platform: #{RUBY_PLATFORM}"
               end
+    @use_docker = system('which docker > /dev/null')
   end
 
   def test_arguments
     cwlfile = File.join(@cwldir, 'arguments.cwl')
-    assert_equal("docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}/tmp:#{@vardir}/spool/cwl -v /tmp:/tmp -v #{File.expand_path @cwldir}/Foo.java:#{@vardir}/lib/cwl/inputs/Foo.java:ro java:7-jdk \"javac\" \"-d\" \"#{@vardir}/spool/cwl\" \"#{@vardir}/lib/cwl/inputs/Foo.java\"",
-                 commandline(cwlfile,
-                             @runtime,
-                             parse_inputs(cwlfile,
-                                          {
-                                            'src' => {
-                                              'class' => 'File',
-                                              'path' => 'Foo.java',
-                                            }
-                                          },
-                                          @runtime['docdir'].first)))
+    cmd = if @use_docker
+            "docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}/tmp:#{@vardir}/spool/cwl -v /tmp:/tmp -v #{File.expand_path @cwldir}/Foo.java:#{@vardir}/lib/cwl/inputs/Foo.java:ro java:7-jdk \"javac\" \"-d\" \"#{@vardir}/spool/cwl\" \"#{@vardir}/lib/cwl/inputs/Foo.java\""
+          else
+            sh = case RUBY_PLATFORM
+                 when /darwin|mac os/
+                   '/bin/bash'
+                 else
+                   '/bin/sh'
+                 end
+            "env HOME='#{Dir.pwd}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"javac\" \"-d\" \"#{Dir.pwd}\" \"#{Dir.pwd}/Foo.java\"'"
+          end
+    assert_equal(cmd, commandline(cwlfile,
+                                  @runtime,
+                                  parse_inputs(cwlfile,
+                                               {
+                                                 'src' => {
+                                                   'class' => 'File',
+                                                   'path' => 'Foo.java',
+                                                 }
+                                               },
+                                               @runtime['docdir'].first)))
   end
 
   def test_steps
