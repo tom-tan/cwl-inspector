@@ -23,4 +23,4 @@ deploy:
   on:
     all_branches: true
     os: linux
-    if: env(TRAVIS_PULL_REQUEST) = false
+    condition: $TRAVIS_PULL_REQUEST = false
