@@ -58,6 +58,12 @@ class TestEcho < Test::Unit::TestCase
     cmd = if @use_docker
             "docker run -i --read-only --rm --workdir=#{@vardir}/spool/cwl --env=HOME=#{@vardir}/spool/cwl --env=TMPDIR=/tmp --user=#{Process::UID.eid}:#{Process::GID.eid} -v #{Dir.pwd}:#{@vardir}/spool/cwl -v /tmp:/tmp docker/whalesay \"cowsay\" \"Hello!\" > #{Dir.pwd}/output"
           else
+            sh = case RUBY_PLATFORM
+                 when /darwin|mac os/
+                   '/bin/bash'
+                 else
+                   '/bin/sh'
+                 end
             "env HOME='#{Dir.pwd}' TMP='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" \"Hello!\"' > #{Dir.pwd}/output"
           end
     assert_equal(cmd, commandline(@cwl, @runtime,
