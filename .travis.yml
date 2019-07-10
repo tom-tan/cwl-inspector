@@ -19,8 +19,10 @@ script:
 
 deploy:
   provider: script
-  script: sh deploy.sh
+  script: |
+    if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+      sh deploy.sh
+    fi
   on:
     all_branches: true
-    os: linux
     condition: $TRAVIS_PULL_REQUEST = false
