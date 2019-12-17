@@ -1050,8 +1050,7 @@ if $0 == __FILE__
             end
             commandline(cwl, runtime, inputs)
           when 'ExpressionTool'
-            obj = cwl.expression.evaluate(get_requirement(cwl, 'InlineJavascriptRequi
-rement', false),
+            obj = cwl.expression.evaluate(get_requirement(cwl, 'InlineJavascriptRequirement', false),
                                           inputs, runtime).to_h
             "echo '#{JSON.dump(obj).gsub("'"){ "\\'" }}' > #{File.join(runtime['outdir'], 'cwl.output.json')}"
           else
