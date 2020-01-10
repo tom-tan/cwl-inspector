@@ -34,13 +34,13 @@ require 'tempfile'
 require 'digest/sha1'
 require_relative 'schema-salad'
 
-class CWLParseError < Exception
+class CWLParseError < StandardError
 end
 
-class CWLInspectionError < Exception
+class CWLInspectionError < StandardError
 end
 
-class UnsupportedError < Exception
+class UnsupportedError < StandardError
 end
 
 def walk(cwl, path, default = nil, exception = false)
