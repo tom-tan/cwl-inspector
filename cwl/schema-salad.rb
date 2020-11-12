@@ -34,7 +34,7 @@ def preprocess(file)
          else
            file
          end
-  obj = open(file) { |f|
+  obj = URI.open(file) { |f|
     YAML.load(f)
   }
   basedir = case file
@@ -77,7 +77,7 @@ end
 def import_resource(uri, basedir)
   obj = case uri
         when %r|^https?://|
-          YAML.load(open(uri, open_timeout: 2))
+          YAML.load(URI.open(uri, open_timeout: 2))
         when %r|^file://(.+)$|
           YAML.load_file($1)
         when %r|^/|
@@ -91,13 +91,13 @@ end
 def include_resource(uri, basedir)
   case uri
   when %r|^https?://|
-    open(uri, open_timeout: 2).read
+    URI.open(uri, open_timeout: 2).read
   when %r|^file://(.+)$|
-    open($1).read
+    URI.open($1).read
   when %r|^/|
-    open(uri).read
+    URI.open(uri).read
   else
-    open(File.expand_path(uri, basedir)).read
+    URI.open(File.expand_path(uri, basedir)).read
   end
 end
 
