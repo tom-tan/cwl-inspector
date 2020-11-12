@@ -247,7 +247,7 @@ class CommonWorkflowLanguage
     obj = if do_preprocess
             preprocess(file)
           else
-            open(file.sub(/#.*/, '')) { |f|
+            URI.open(file.sub(/#.*/, '')) { |f|
               YAML.load(f)
             }
           end
