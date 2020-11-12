@@ -1005,13 +1005,14 @@ class CWLFile < CWLObject
       file.nameroot = File.basename file.path, file.nameext
       file.format = @format
       if File.exist? file.path
-        #sha1 = Digest::SHA1.new
-        #f = File.open(file.path, 'rb')
-        #while s = f.read(2**20)
-        #  sha1.update(s)
-        #end
-        #digest = sha1.hexdigest
-        #file.checksum = "sha1$#{digest}"
+        # TODO: make it configurable whether checksum is calculated or not
+        sha1 = Digest::SHA1.new
+        f = File.open(file.path, 'rb')
+        while s = f.read(2**20)
+          sha1.update(s)
+        end
+        digest = sha1.hexdigest
+        file.checksum = "sha1$#{digest}"
         file.size = File.size(file.path)
       end
     end
