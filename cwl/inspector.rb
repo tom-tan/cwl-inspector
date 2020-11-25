@@ -601,7 +601,17 @@ def parse_inputs(cwl, inputs, docdir)
                   .map{ |h|
       Workflow.load_requirement(h, docdir, [], {}, {})
     }.sort_by{ |h| h.class.to_s }
-    [input_obj, { requirements: reqs, hints: hints }]
+
+    wreqs = inputs.fetch('cwl-inspector:weak-requirements', [])
+                 .map{ |r|
+      Workflow.load_requirement(r, docdir, [], {}, {})
+    }.sort_by{ |r| r.class.to_s }
+    whints = inputs.fetch('cwl-inspector:weak-hints', [])
+                  .map{ |h|
+      Workflow.load_requirement(h, docdir, [], {}, {})
+    }.sort_by{ |h| h.class.to_s }
+
+    [input_obj, { requirements: reqs, hints: hints, weak_requirements: wreqs, weak_hints: whints }]
   end
 end
 
@@ -976,16 +986,18 @@ def listSecondaryFiles(file, sec, inputs, runtime, use_js)
   end
 end
 
-def merge_requirements(cwl, reqs)
-  overrideReqs = reqs.fetch(:requirements, [])
-  newReqs = [*overrideReqs, *cwl.requirements].uniq{ |r| r.class.to_s }
-  
-  overrideHints = reqs.fetch(:hints, [])
-  newHints = [*overrideHints, *cwl.hints].uniq{ |h| h.class.to_s }
-
-  cwl.requirements = newReqs
-  cwl.hints = newHints
+def cwl_merge_requirements(cwl, reqs)
+  cwl.requirements = merge_requirements(reqs.fetch(:requirements, []),
+                                        cwl.requirements,
+                                        reqs.fetch(:weak_requirements, [])).sort_by{ |r| r.class.to_s }
+  cwl.hints = merge_requirements(reqs.fetch(:hints, []),
+                                 cwl.hints,
+                                 reqs.fetch(:weak_hints, [])).sort_by{ |h| h.class.to_s }
   cwl
+end
+
+def merge_requirements(*reqs)
+  reqs.flatten.uniq{ |r| r.class.to_s }
 end
 
 if $0 == __FILE__
@@ -1053,7 +1065,7 @@ if $0 == __FILE__
         end
   docdir = file == '-' ? Dir.pwd : File.dirname(File.expand_path file)
   inputs, reqs = parse_inputs(cwl_, inp_obj, docdir)
-  cwl = merge_requirements(cwl_, reqs)
+  cwl = cwl_merge_requirements(cwl_, reqs)
 
   runtime = eval_runtime(cwl, inputs, outdir, tmpdir, docdir)
 
