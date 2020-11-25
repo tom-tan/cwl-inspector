@@ -603,11 +603,11 @@ def parse_inputs(cwl, inputs, docdir)
     }.sort_by{ |h| h.class.to_s }
 
     wreqs = inputs.fetch('cwl-inspector:weak-requirements', [])
-                 .map{ |r|
+                  .map{ |r|
       Workflow.load_requirement(r, docdir, [], {}, {})
     }.sort_by{ |r| r.class.to_s }
     whints = inputs.fetch('cwl-inspector:weak-hints', [])
-                  .map{ |h|
+                   .map{ |h|
       Workflow.load_requirement(h, docdir, [], {}, {})
     }.sort_by{ |h| h.class.to_s }
 
