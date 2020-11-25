@@ -418,7 +418,7 @@ class CommandLineTool < CWLObject
            end
     @requirements = reqs.map{ |r|
       self.class.load_requirement(r, dir, frags, nss)
-    }
+    }.sort_by{ |r| r.class.to_s }
 
     hints = if obj.fetch('hints', []).instance_of? Array
               obj.fetch('hints', [])
@@ -429,7 +429,7 @@ class CommandLineTool < CWLObject
             end
     @hints = hints.map{ |h|
       self.class.load_requirement(h, dir, frags, nss, true)
-    }
+    }.sort_by{ |h| h.class.to_s }
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
     @cwlVersion = obj.fetch('cwlVersion', nil)
@@ -3061,7 +3061,7 @@ class Workflow < CWLObject
            end
     @requirements = reqs.map{ |r|
       self.class.load_requirement(r, dir, frags, nss)
-    }
+    }.sort_by{ |r| r.class.to_s }
 
     hints = if obj.fetch('hints', []).instance_of? Array
               obj.fetch('hints', [])
@@ -3072,7 +3072,7 @@ class Workflow < CWLObject
             end
     @hints = hints.map{ |h|
       self.class.load_requirement(h, dir, frags, nss, true)
-    }
+    }.sort_by{ |h| h.class.to_s }
 
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
@@ -3534,7 +3534,7 @@ class WorkflowStep < CWLObject
            end
     @requirements = reqs.map{ |r|
       self.class.load_requirement(r, dir, frags, nss)
-    }
+    }.sort_by{ |r| r.class.to_s }
 
     hints = if obj.fetch('hints', []).instance_of? Array
               obj.fetch('hints', [])
@@ -3545,7 +3545,7 @@ class WorkflowStep < CWLObject
             end
     @hints = hints.map{ |h|
       self.class.load_requirement(h, dir, frags, nss, true)
-    }
+    }.sort_by{ |h| h.class.to_s }
 
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
@@ -3948,7 +3948,7 @@ class ExpressionTool < CWLObject
            end
     @requirements = reqs.map{ |r|
       self.class.load_requirement(r, dir, frags, nss)
-    }
+    }.sort_by{ |r| r.class.to_s }
 
     hints = if obj.fetch('hints', []).instance_of? Array
               obj.fetch('hints', [])
@@ -3959,7 +3959,7 @@ class ExpressionTool < CWLObject
             end
     @hints = hints.map{ |h|
       self.class.load_requirement(h, dir, frags, nss, true)
-    }
+    }.sort_by{ |h| h.class.to_s }
     @label = obj.fetch('label', nil)
     @doc = obj.fetch('doc', nil)
     @cwlVersion = obj.fetch('cwlVersion', nil)

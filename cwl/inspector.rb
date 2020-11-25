@@ -575,9 +575,12 @@ def parse_inputs(cwl, inputs, docdir)
     inputs = {}
   end
   if inputs.nil?
-    Hash[walk(cwl, '.inputs', []).map{ |inp|
+    [ 
+      Hash[walk(cwl, '.inputs', []).map{ |inp|
            [inp.id, UninstantiatedVariable.new("$#{inp.id}")]
-         }]
+         }],
+      {}
+    ]     
   else
     invalids = Hash[(inputs.keys-walk(cwl, '.inputs', []).map{ |inp| inp.id }).map{ |k|
                       [k, InvalidVariable.new(k)]
@@ -588,7 +591,17 @@ def parse_inputs(cwl, inputs, docdir)
                                           walk(inp, '.secondaryFiles', []),
                                           cwl, docdir)]
                   }]
-    invalids.merge(valids)
+    input_obj = invalids.merge(valids)
+
+    reqs = inputs.fetch('cwl:requirements', [])
+                 .map{ |r|
+      Workflow.load_requirement(r, docdir, [], {}, {})
+    }.sort_by{ |r| r.class.to_s }
+    hints = inputs.fetch('cwl-inspector:hints', [])
+                  .map{ |h|
+      Workflow.load_requirement(h, docdir, [], {}, {})
+    }.sort_by{ |h| h.class.to_s }
+    [input_obj, { requirements: reqs, hints: hints }]
   end
 end
 
@@ -963,6 +976,18 @@ def listSecondaryFiles(file, sec, inputs, runtime, use_js)
   end
 end
 
+def merge_requirements(cwl, reqs)
+  overrideReqs = reqs.fetch(:requirements, [])
+  newReqs = [*overrideReqs, *cwl.requirements].uniq{ |r| r.class.to_s }
+  
+  overrideHints = reqs.fetch(:hints, [])
+  newHints = [*overrideHints, *cwl.hints].uniq{ |h| h.class.to_s }
+
+  cwl.requirements = newReqs
+  cwl.hints = newHints
+  cwl
+end
+
 if $0 == __FILE__
   format = :yaml
   inp_obj = nil
@@ -1021,13 +1046,15 @@ if $0 == __FILE__
     raise CWLInspectionError, '--evaluate-expressions needs job file'
   end
 
-  cwl = if file == '-'
+  cwl_ = if file == '-'
           CommonWorkflowLanguage.load(YAML.load_stream(STDIN).first, Dir.pwd, {}, {})
         else
           CommonWorkflowLanguage.load_file(file, do_preprocess)
         end
   docdir = file == '-' ? Dir.pwd : File.dirname(File.expand_path file)
-  inputs = parse_inputs(cwl, inp_obj, docdir)
+  inputs, reqs = parse_inputs(cwl_, inp_obj, docdir)
+  cwl = merge_requirements(cwl_, reqs)
+
   runtime = eval_runtime(cwl, inputs, outdir, tmpdir, docdir)
 
   ret = case cmd
