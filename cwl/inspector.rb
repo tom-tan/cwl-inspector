@@ -992,7 +992,13 @@ def cwl_merge_requirements(cwl, reqs)
                                         reqs.fetch(:weak_requirements, [])).sort_by{ |r| r.class.to_s }
   cwl.hints = merge_requirements(reqs.fetch(:hints, []),
                                  cwl.hints,
-                                 reqs.fetch(:weak_hints, [])).sort_by{ |h| h.class.to_s }
+                                 reqs.fetch(:weak_hints, []))
+                .sort_by{ |h| h.class.to_s }
+                .delete_if{ |h|
+                  cwl.requirements.any?{ |r| 
+                    r.instance_of? h
+                  }
+                }
   cwl
 end
 
