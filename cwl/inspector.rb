@@ -996,7 +996,7 @@ def cwl_merge_requirements(cwl, reqs)
                 .sort_by{ |h| h.class.to_s }
                 .delete_if{ |h|
                   cwl.requirements.any?{ |r| 
-                    r.instance_of? h
+                    r.instance_of? h.class
                   }
                 }
   cwl
