@@ -582,7 +582,10 @@ def parse_inputs(cwl, inputs, docdir)
       {}
     ]     
   else
-    invalids = Hash[(inputs.keys-walk(cwl, '.inputs', []).map{ |inp| inp.id }).map{ |k|
+    invalid_keys = inputs.keys -
+                      walk(cwl, '.inputs', []).map{ |inp| inp.id } -
+                      ['cwl:requiremets', 'cwl-inspector:hints', 'cwl-inspector:weak-requirements', 'cwl-inspector:weak-hints']
+    invalids = Hash[invalid_keys.map{ |k|
                       [k, InvalidVariable.new(k)]
                     }]
     valids = Hash[walk(cwl, '.inputs', []).map{ |inp|
@@ -611,7 +614,15 @@ def parse_inputs(cwl, inputs, docdir)
       Workflow.load_requirement(h, docdir, [], {}, {})
     }.sort_by{ |h| h.class.to_s }
 
-    [input_obj, { requirements: reqs, hints: hints, weak_requirements: wreqs, weak_hints: whints }]
+    [
+      input_obj,
+      {
+        'cwl:requirements' => reqs,
+        'cwl-inspector:hints' => hints,
+        'cwl-inspector:weak-requirements' => wreqs,
+        'cwl-inspector:weak-hints' => whints
+      }.delete_if{ |k, v| v.empty? }
+    ]
   end
 end
 
@@ -987,15 +998,14 @@ def listSecondaryFiles(file, sec, inputs, runtime, use_js)
 end
 
 def cwl_merge_requirements(cwl, reqs)
-  cwl.requirements = merge_requirements(reqs.fetch(:requirements, []),
+  cwl.requirements = merge_requirements(reqs.fetch('cwl:requirements', []),
                                         cwl.requirements,
-                                        reqs.fetch(:weak_requirements, [])).sort_by{ |r| r.class.to_s }
-  cwl.hints = merge_requirements(reqs.fetch(:hints, []),
+                                        reqs.fetch('cwl-inspector:weak-requirements', []))
+  cwl.hints = merge_requirements(reqs.fetch('cwl-inspector:hints', []),
                                  cwl.hints,
-                                 reqs.fetch(:weak_hints, []))
-                .sort_by{ |h| h.class.to_s }
+                                 reqs.fetch('cwl-inspector:weak-hints', []))
                 .delete_if{ |h|
-                  cwl.requirements.any?{ |r| 
+                  cwl.requirements.any?{ |r|
                     r.instance_of? h.class
                   }
                 }
@@ -1003,7 +1013,7 @@ def cwl_merge_requirements(cwl, reqs)
 end
 
 def merge_requirements(*reqs)
-  reqs.flatten.uniq{ |r| r.class.to_s }
+  reqs.flatten.uniq{ |r| r.class.to_s }.sort_by{ |r| r.class.to_s }
 end
 
 if $0 == __FILE__
