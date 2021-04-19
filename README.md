@@ -91,7 +91,7 @@ You can use [`ghcr.io/tom-tan/cwl-inspector`](https://github.com/users/tom-tan/p
 This image is built by [Github Actions](https://github.com/tom-tan/cwl-inspector/actions).
 
 ```console
-$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector:v0.1.0 - .cwlVersion
+$ cat echo.cwl | docker run --rm -i ghcr.io/tom-tan/cwl-inspector:v0.1.1 - .cwlVersion
 --- v1.0
 ```
 
