@@ -41,16 +41,15 @@ class TestWorkflow < Test::Unit::TestCase
                  end
             "env HOME='#{@runtime['outdir']}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"javac\" \"-d\" \"#{@runtime['outdir']}\" \"#{File.expand_path @cwldir}/Foo.java\"'"
           end
-    assert_equal(cmd, commandline(cwlfile,
-                                  @runtime,
-                                  parse_inputs(cwlfile,
-                                               {
-                                                 'src' => {
-                                                   'class' => 'File',
-                                                   'path' => 'Foo.java',
-                                                 }
-                                               },
-                                               @runtime['docdir'].first)))
+    inputs, _ = parse_inputs(cwlfile,
+                             {
+                              'src' => {
+                                'class' => 'File',
+                                'path' => 'Foo.java',
+                              }
+                             },
+                             @runtime['docdir'].first)
+    assert_equal(cmd, commandline(cwlfile, @runtime, inputs))
   end
 
   def test_steps

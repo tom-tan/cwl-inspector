@@ -51,7 +51,8 @@ class TestEcho < Test::Unit::TestCase
                  end
             "env HOME='#{Dir.pwd}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" ' > #{Dir.pwd}/output"
           end
-    assert_equal(cmd, commandline(@cwl, @runtime, parse_inputs(@cwl, {}, @runtime)))
+    inputs, _ = parse_inputs(@cwl, {}, @runtime)
+    assert_equal(cmd, commandline(@cwl, @runtime, inputs))
   end
 
   def test_instantiated_commandline
@@ -66,8 +67,8 @@ class TestEcho < Test::Unit::TestCase
                  end
             "env HOME='#{Dir.pwd}' TMPDIR='#{@runtime['tmpdir']}' #{sh} -c 'cd ~ && \"cowsay\" \"Hello!\"' > #{Dir.pwd}/output"
           end
-    assert_equal(cmd, commandline(@cwl, @runtime,
-                                  parse_inputs(@cwl, { 'input' => 'Hello!' }, @runtime)))
+    inputs, _ = parse_inputs(@cwl, { 'input' => 'Hello!' }, @runtime)
+    assert_equal(cmd, commandline(@cwl, @runtime, inputs))
   end
 
   def test_root_keys
