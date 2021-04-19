@@ -1,10 +1,11 @@
 # cwl-inspector
-[![Build Status](https://travis-ci.org/tom-tan/cwl-inspector.svg?branch=master)](https://travis-ci.org/tom-tan/cwl-inspector)
+[![Actions Status](https://github.com/tom-tan/cwl-inspector/workflows/ci/badge.svg)](https://github.com/tom-tan/cwl-inspector/actions)
+[![license](https://badgen.net/github/license/tom-tan/cwl-inspector)](https://github.com/tom-tan/cwl-inspector/blob/master/LICENSE)
 
 cwl-inspector provides a handy way to inspect properties of tools or workflows written in Common Workflow Language
 
 # Requirements
-- Ruby 2.4.1 or later
+- Ruby 2.7 or later
 
 # Running examples
 
@@ -86,11 +87,11 @@ docker run -i --read-only --rm --workdir=/private/var/spool/cwl --env=HOME=/priv
 ```
 
 # Dockerized cwl-inspector
-You can use [`ttanjo/cwl-inspector`](https://hub.docker.com/r/ttanjo/cwl-inspector/) image.
-This image is built by [Travis CI](https://travis-ci.org/tom-tan/cwl-inspector).
+You can use [`ghcr.io/tom-tan/cwl-inspector`](https://github.com/users/tom-tan/packages/container/package/cwl-inspector) image.
+This image is built by [Github Actions](https://github.com/tom-tan/cwl-inspector/actions).
 
 ```console
-$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector:v0.0.6 - .cwlVersion
+$ cat echo.cwl | docker run --rm -i ttanjo/cwl-inspector:v0.1.0 - .cwlVersion
 --- v1.0
 ```
 
