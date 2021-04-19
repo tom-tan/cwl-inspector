@@ -101,7 +101,7 @@ $ cat echo.cwl | docker run --rm -i ghcr.io/tom-tan/cwl-inspector:v0.1.1 - .cwlV
 $ cwltool --make-template echo.cwl > echo.yml
 $ cat echo.yml
 input: a_string  # type "string" (optional)
-$ cat echo.cwl | docker run --rm -i -v $PWD/echo.yml:/workdir/echo.yml --workdir=/workdir ttanjo/cwl-inspector:v0.0.6 -i echo.yml - commandline
+$ cat echo.cwl | docker run --rm -i -v $PWD/echo.yml:/workdir/echo.yml --workdir=/workdir ghcr.io/tom-tan/cwl-inspector:v0.1.1 -i echo.yml - commandline
 env HOME='/workdir' TMPDIR='/tmp' /bin/sh -c 'cd ~ && "cowsay" "a_string"' > /workdir/output
 ```
 
