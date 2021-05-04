@@ -2952,7 +2952,13 @@ class Expression
         InputParameter.parse_object(nil, es.first, runtime['docdir'].first, {}, {})
       else
         es.map{ |e|
-          e.nil? ? 'null' : e
+          if e.nil?
+            'null'
+          elsif e.instance_of?(CWLFile) or e.instance_of?(Directory)
+            e.path
+          else
+            e
+          end
         }.join
       end
     end
