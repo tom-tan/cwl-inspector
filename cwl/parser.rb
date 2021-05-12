@@ -971,7 +971,7 @@ class CWLFile < CWLObject
     self
   end
 
-  def evaluate(docdir, loadContents = false)
+  def evaluate(docdir, loadContents = false, compute_checksum = false)
     file = self.dup
     location = @location.nil? ? @path : @location
     if location.nil?
@@ -1005,11 +1005,12 @@ class CWLFile < CWLObject
       file.nameroot = File.basename file.path, file.nameext
       file.format = @format
       if File.exist? file.path
-        # TODO: make it configurable whether checksum is calculated or not
-        sha1 = Digest::SHA1.new
-        sha1.file(file.path)
-        digest = sha1.hexdigest
-        file.checksum = "sha1$#{digest}"
+        if compute_checksum
+          sha1 = Digest::SHA1.new
+          sha1.file(file.path)
+          digest = sha1.hexdigest
+          file.checksum = "sha1$#{digest}"
+        end
         file.size = File.size(file.path)
       end
     end
@@ -1021,7 +1022,7 @@ class CWLFile < CWLObject
                     end
     file.secondaryFiles = @secondaryFiles.map{ |sf|
       # TODO: eval needs nss!
-      sf.evaluate(docdir, loadContents)
+      sf.evaluate(docdir, loadContents, compute_checksum)
     }
     file.contents = if @contents
                       @contents
@@ -1092,7 +1093,7 @@ class Directory < CWLObject
     self
   end
 
-  def evaluate(docdir, loadContents = false)
+  def evaluate(docdir, loadContents = false, compute_checksum = false)
     dir = self.dup
     location = @location.nil? ? @path : @location
 
@@ -1134,19 +1135,19 @@ class Directory < CWLObject
                                  'class' => 'Directory',
                                  'location' => 'file://'+path,
                                }, docdir, {}, {}) # TODO: extras
-            d.evaluate(docdir, false)
+            d.evaluate(docdir, false, compute_checksum)
           else
             f = CWLFile.load({
                                'class' => 'File',
                                'location' => 'file://'+path,
                              }, docdir, {}, {}) # TODO: extras
-            f.evaluate(docdir, false)
+            f.evaluate(docdir, false, compute_checksum)
           end
         }
       end
     else
       dir.listing = @listing.map{ |lst|
-        lst.evaluate(docdir, loadContents)
+        lst.evaluate(docdir, loadContents, compute_checksum)
       }
     end
     dir
