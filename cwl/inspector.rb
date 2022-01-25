@@ -584,7 +584,7 @@ def parse_inputs(cwl, inputs, docdir)
   else
     invalid_keys = inputs.keys -
                       walk(cwl, '.inputs', []).map{ |inp| inp.id } -
-                      ['cwl:requiremets', 'cwl-inspector:hints', 'cwl-inspector:weak-requirements', 'cwl-inspector:weak-hints']
+                      ['cwl:requirements', 'cwl-inspector:hints', 'cwl-inspector:weak-requirements', 'cwl-inspector:weak-hints']
     invalids = Hash[invalid_keys.map{ |k|
                       [k, InvalidVariable.new(k)]
                     }]
